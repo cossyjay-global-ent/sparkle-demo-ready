@@ -64,12 +64,23 @@ export interface Customer {
   syncStatus: 'pending' | 'synced' | 'conflict';
 }
 
+export interface DebtItem {
+  id: string;
+  itemName: string;
+  quantity: number;
+  price: number;
+  total: number;
+  date: number;
+}
+
 export interface Debt {
   id: string;
   userId: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   description: string;
+  items: DebtItem[];
   totalAmount: number;
   paidAmount: number;
   dueDate?: number;
@@ -86,7 +97,7 @@ export interface DebtPayment {
   debtId: string;
   amount: number;
   date: number;
-  note?: string;
+  description?: string;
   createdAt: number;
   updatedAt: number;
   syncStatus: 'pending' | 'synced' | 'conflict';
