@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback } from 'react';
-import { db, Product, Sale, Expense, Customer, Debt, DebtPayment, generateId, now } from '@/lib/database';
+import { db, Product, Sale, Expense, Customer, Debt, DebtItem, DebtPayment, generateId, now } from '@/lib/database';
 import { useAuth } from './AuthContext';
 import { toast } from '@/hooks/use-toast';
 
