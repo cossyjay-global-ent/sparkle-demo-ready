@@ -48,6 +48,7 @@ export default function DebtsPage() {
 
   // Payment form state
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDescription, setPaymentDescription] = useState('');
 
   useEffect(() => {
     loadData();
@@ -60,7 +61,7 @@ export default function DebtsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `NGN ${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (timestamp: number) => {
@@ -272,6 +273,7 @@ export default function DebtsPage() {
   const handlePaymentClick = async (debt: Debt) => {
     setSelectedDebt(debt);
     setPaymentAmount('');
+    setPaymentDescription('');
     setViewMode('payment');
   };
 
@@ -281,18 +283,28 @@ export default function DebtsPage() {
       return;
     }
 
+    const balance = getBalance(selectedDebt);
+    const amount = Number(paymentAmount);
+    
+    // Validate payment cannot exceed balance
+    if (amount > balance) {
+      toast({ title: "Error", description: `Payment cannot exceed outstanding balance of ₦${balance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`, variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
     const payment = await addDebtPayment({
       debtId: selectedDebt.id,
-      amount: Number(paymentAmount),
+      amount: amount,
       date: Date.now(),
-      description: 'Payment Received'
+      description: paymentDescription.trim() || 'Payment Received'
     });
 
     if (payment) {
       toast({ title: "Success", description: "Payment recorded" });
       setViewMode('list');
       setPaymentAmount('');
+      setPaymentDescription('');
       loadData();
     }
     setIsLoading(false);
@@ -837,7 +849,7 @@ export default function DebtsPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Payment Amount</Label>
+            <Label>Payment Amount *</Label>
             <Input
               type="number"
               min="0"
@@ -846,6 +858,19 @@ export default function DebtsPage() {
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               placeholder="Enter amount"
+              className="input-styled"
+            />
+            {Number(paymentAmount) > balance && (
+              <p className="text-sm text-destructive">Payment cannot exceed balance</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Input
+              value={paymentDescription}
+              onChange={(e) => setPaymentDescription(e.target.value)}
+              placeholder="Payment description (optional)"
               className="input-styled"
             />
           </div>
