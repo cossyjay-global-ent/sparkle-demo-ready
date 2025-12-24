@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRBAC } from '@/contexts/RBACContext';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Loader2 } from 'lucide-react';
 import DashboardHome from '@/components/dashboard/DashboardHome';
@@ -11,10 +12,14 @@ import ProfitPage from '@/components/dashboard/ProfitPage';
 import CustomersPage from '@/components/dashboard/CustomersPage';
 import DebtsPage from '@/components/dashboard/DebtsPage';
 import ReportsPage from '@/components/dashboard/ReportsPage';
+import AuditLogsPage from '@/components/dashboard/AuditLogsPage';
 
 const Dashboard = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const { isLoading: rbacLoading } = useRBAC();
   const navigate = useNavigate();
+
+  const isLoading = authLoading || rbacLoading;
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -48,6 +53,7 @@ const Dashboard = () => {
             <Route path="customers" element={<CustomersPage />} />
             <Route path="debts" element={<DebtsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
           </Routes>
         </div>
       </main>

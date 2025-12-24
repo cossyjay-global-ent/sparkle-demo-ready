@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useRBAC } from '@/contexts/RBACContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ type ViewMode = 'list' | 'add' | 'view' | 'edit' | 'payment';
 
 export default function DebtsPage() {
   const { getDebts, addDebt, updateDebt, deleteDebt, getDebtPayments, addDebtPayment, getCustomers, addCustomer } = useData();
+  const { canDeleteDebt } = useRBAC();
   const [debts, setDebts] = useState<Debt[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
@@ -440,10 +442,12 @@ export default function DebtsPage() {
                     <Edit2 className="w-4 h-4 mr-1" />
                     Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDeleteClick(debt.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete
-                  </Button>
+                  {canDeleteDebt && (
+                    <Button variant="outline" size="sm" onClick={() => handleDeleteClick(debt.id)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
