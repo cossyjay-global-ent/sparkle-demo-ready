@@ -94,7 +94,6 @@ export default function SalesPage() {
   };
 
   const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
-  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-NG', {
@@ -161,12 +160,6 @@ export default function SalesPage() {
                     <span className="text-muted-foreground">Total:</span>
                     <span className="font-bold text-lg">{currency}{selectedProduct.sellingPrice * parseInt(quantity || '0')}</span>
                   </div>
-                  <div className="flex justify-between text-success">
-                    <span>Profit:</span>
-                    <span className="font-medium">
-                      {currency}{(selectedProduct.sellingPrice - selectedProduct.costPrice) * parseInt(quantity || '0')}
-                    </span>
-                  </div>
                 </div>
               )}
               <Button
@@ -181,19 +174,13 @@ export default function SalesPage() {
         </Dialog>
       </div>
 
-      {/* Grand Totals */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="grand-total-card">
-          <p className="text-primary-foreground/80 text-sm">Total Sales</p>
-          <p className="text-3xl font-bold">{currency}{totalSales.toLocaleString()}</p>
-        </div>
-        <div className="grand-total-card">
-          <p className="text-primary-foreground/80 text-sm">Total Profit</p>
-          <p className="text-3xl font-bold">{currency}{totalProfit.toLocaleString()}</p>
-        </div>
+      {/* Grand Totals - Profit only visible in Profit section */}
+      <div className="grand-total-card">
+        <p className="text-primary-foreground/80 text-sm">Total Sales</p>
+        <p className="text-3xl font-bold">{currency}{totalSales.toLocaleString()}</p>
       </div>
 
-      {/* Sales List */}
+      {/* Sales List - No profit column (profit only in Profit section) */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -202,7 +189,6 @@ export default function SalesPage() {
                 <th className="text-left p-4 font-medium text-muted-foreground">Product</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Qty</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Total</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Profit</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Date</th>
                 <th className="text-left p-4 font-medium text-muted-foreground"></th>
               </tr>
@@ -210,7 +196,7 @@ export default function SalesPage() {
             <tbody>
               {sales.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="p-8 text-center text-muted-foreground">
                     <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>No sales recorded yet</p>
                   </td>
@@ -221,7 +207,6 @@ export default function SalesPage() {
                     <td className="p-4 font-medium">{sale.productName}</td>
                     <td className="p-4">{sale.quantity}</td>
                     <td className="p-4">{currency}{sale.totalAmount.toLocaleString()}</td>
-                    <td className="p-4 text-success">{currency}{sale.profit.toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                     <td className="p-4">
                       <Button
