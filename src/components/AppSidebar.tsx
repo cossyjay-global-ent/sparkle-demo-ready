@@ -14,27 +14,32 @@ import {
   LogOut,
   Wifi,
   WifiOff,
-  RefreshCw
+  RefreshCw,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRBAC } from '@/contexts/RBACContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/dashboard/sales', label: 'Sales', icon: ShoppingCart },
-  { path: '/dashboard/products', label: 'Products', icon: Package },
-  { path: '/dashboard/expenses', label: 'Expenses', icon: Receipt },
-  { path: '/dashboard/profit', label: 'Profit', icon: TrendingUp },
-  { path: '/dashboard/customers', label: 'Customers', icon: Users },
-  { path: '/dashboard/debts', label: 'Debts', icon: CreditCard },
-  { path: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
-];
 
 export function AppSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { logout, isOnline } = useAuth();
+  const { role, canViewProfit, canViewAuditLogs } = useRBAC();
   const location = useLocation();
+
+  const navItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
+    { path: '/dashboard/sales', label: 'Sales', icon: ShoppingCart, show: true },
+    { path: '/dashboard/products', label: 'Products', icon: Package, show: true },
+    { path: '/dashboard/expenses', label: 'Expenses', icon: Receipt, show: true },
+    { path: '/dashboard/profit', label: 'Profit', icon: TrendingUp, show: canViewProfit },
+    { path: '/dashboard/customers', label: 'Customers', icon: Users, show: true },
+    { path: '/dashboard/debts', label: 'Debts', icon: CreditCard, show: true },
+    { path: '/dashboard/reports', label: 'Reports', icon: BarChart3, show: true },
+    { path: '/dashboard/audit-logs', label: 'Audit Logs', icon: Shield, show: canViewAuditLogs },
+  ];
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -76,7 +81,14 @@ export function AppSidebar() {
       )}>
         {/* Sidebar Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
-          <h2 className="font-bold text-lg text-sidebar-foreground">Offline POS</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-lg text-sidebar-foreground">Offline POS</h2>
+            {role && (
+              <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+                {role}
+              </Badge>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -106,7 +118,7 @@ export function AppSidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          {navItems.map((item) => (
+          {navItems.filter(item => item.show).map((item) => (
             <NavLink
               key={item.path}
               to={item.path}

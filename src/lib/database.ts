@@ -1,6 +1,8 @@
 import Dexie, { Table } from 'dexie';
 
 // Types for our offline-first database
+export type AppRole = 'admin' | 'staff';
+
 export interface User {
   id: string;
   email: string;
@@ -9,6 +11,32 @@ export interface User {
   createdAt: number;
   updatedAt: number;
   lastSyncAt?: number;
+}
+
+export interface UserRole {
+  id: string;
+  userId: string;
+  role: AppRole;
+  assignedBy?: string;
+  createdAt: number;
+  updatedAt: number;
+  syncStatus: 'pending' | 'synced' | 'conflict';
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userRole: AppRole;
+  action: 'create' | 'update' | 'delete' | 'login' | 'logout' | 'role_change' | 'payment' | 'sync';
+  tableName: string;
+  recordId: string;
+  description: string;
+  previousData?: string;
+  newData?: string;
+  mode: 'online' | 'offline';
+  timestamp: number;
+  syncStatus: 'pending' | 'synced';
 }
 
 export interface Product {
@@ -85,6 +113,7 @@ export interface Debt {
   paidAmount: number;
   dueDate?: number;
   status: 'pending' | 'partial' | 'paid';
+  deleteStatus?: 'active' | 'pending_delete';
   date: number;
   createdAt: number;
   updatedAt: number;
@@ -114,6 +143,16 @@ export interface SyncLog {
   synced: boolean;
 }
 
+export interface DeleteQueue {
+  id: string;
+  userId: string;
+  tableName: string;
+  recordId: string;
+  data: string;
+  queuedAt: number;
+  syncStatus: 'pending' | 'synced' | 'failed';
+}
+
 export interface AppSettings {
   id: string;
   userId: string;
@@ -127,6 +166,8 @@ export interface AppSettings {
 
 class OfflinePOSDatabase extends Dexie {
   users!: Table<User>;
+  userRoles!: Table<UserRole>;
+  auditLogs!: Table<AuditLog>;
   products!: Table<Product>;
   sales!: Table<Sale>;
   expenses!: Table<Expense>;
@@ -134,20 +175,24 @@ class OfflinePOSDatabase extends Dexie {
   debts!: Table<Debt>;
   debtPayments!: Table<DebtPayment>;
   syncLogs!: Table<SyncLog>;
+  deleteQueue!: Table<DeleteQueue>;
   appSettings!: Table<AppSettings>;
 
   constructor() {
     super('OfflinePOSDB');
     
-    this.version(1).stores({
+    this.version(2).stores({
       users: 'id, email',
+      userRoles: 'id, userId, role, [userId+role]',
+      auditLogs: 'id, userId, action, tableName, timestamp, syncStatus, [userId+syncStatus]',
       products: 'id, userId, name, category, syncStatus, [userId+syncStatus]',
       sales: 'id, userId, productId, date, syncStatus, [userId+date], [userId+syncStatus]',
       expenses: 'id, userId, category, date, syncStatus, [userId+date], [userId+syncStatus]',
       customers: 'id, userId, name, phone, syncStatus, [userId+syncStatus]',
-      debts: 'id, userId, customerId, status, dueDate, syncStatus, [userId+status], [userId+syncStatus]',
+      debts: 'id, userId, customerId, status, deleteStatus, dueDate, syncStatus, [userId+status], [userId+syncStatus], [userId+deleteStatus]',
       debtPayments: 'id, userId, debtId, date, syncStatus, [userId+syncStatus]',
       syncLogs: 'id, userId, tableName, recordId, synced, timestamp, [userId+synced]',
+      deleteQueue: 'id, userId, tableName, recordId, syncStatus, [userId+syncStatus]',
       appSettings: 'id, userId'
     });
   }
