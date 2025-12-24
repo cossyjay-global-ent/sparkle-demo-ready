@@ -5,7 +5,6 @@ import {
   ShoppingCart, 
   Package, 
   Receipt, 
-  TrendingUp, 
   Users, 
   CreditCard,
   ArrowUpRight,
@@ -55,14 +54,12 @@ export default function DashboardHome() {
   const [stats, setStats] = useState({
     totalSales: 0,
     totalExpenses: 0,
-    totalProfit: 0,
     totalProducts: 0,
     totalCustomers: 0,
     totalDebts: 0,
     totalPaid: 0,
     totalOutstanding: 0,
-    todaySales: 0,
-    todayProfit: 0
+    todaySales: 0
   });
 
   const currency = settings?.currencySymbol || '₦';
@@ -84,25 +81,21 @@ export default function DashboardHome() {
 
       const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
       const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-      const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
       const totalDebts = debts.reduce((sum, d) => sum + d.totalAmount, 0);
       const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
       
       const todaySalesData = sales.filter(s => s.date >= todayStart && s.date < todayEnd);
       const todaySales = todaySalesData.reduce((sum, s) => sum + s.totalAmount, 0);
-      const todayProfit = todaySalesData.reduce((sum, s) => sum + s.profit, 0);
 
       setStats({
         totalSales,
         totalExpenses,
-        totalProfit,
         totalProducts: products.length,
         totalCustomers: customers.length,
         totalDebts,
         totalPaid,
         totalOutstanding: totalDebts - totalPaid,
-        todaySales,
-        todayProfit
+        todaySales
       });
     };
 
@@ -121,19 +114,13 @@ export default function DashboardHome() {
       </div>
 
       {/* Today's Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="grand-total-card">
-          <p className="text-primary-foreground/80 text-sm mb-1">Today's Sales</p>
-          <p className="text-3xl font-bold">{formatCurrency(stats.todaySales)}</p>
-        </div>
-        <div className="grand-total-card">
-          <p className="text-primary-foreground/80 text-sm mb-1">Today's Profit</p>
-          <p className="text-3xl font-bold">{formatCurrency(stats.todayProfit)}</p>
-        </div>
+      <div className="grand-total-card">
+        <p className="text-primary-foreground/80 text-sm mb-1">Today's Sales</p>
+        <p className="text-3xl font-bold">{formatCurrency(stats.todaySales)}</p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           title="Total Sales"
           value={formatCurrency(stats.totalSales)}
@@ -143,11 +130,6 @@ export default function DashboardHome() {
           title="Total Expenses"
           value={formatCurrency(stats.totalExpenses)}
           icon={<Receipt className="w-5 h-5 text-primary" />}
-        />
-        <StatCard
-          title="Total Profit"
-          value={formatCurrency(stats.totalProfit)}
-          icon={<TrendingUp className="w-5 h-5 text-primary" />}
         />
         <StatCard
           title="Products"
@@ -184,12 +166,6 @@ export default function DashboardHome() {
           title="Total Customers"
           value={stats.totalCustomers.toString()}
           icon={<Users className="w-5 h-5 text-primary" />}
-        />
-        <StatCard
-          title="Net Profit"
-          value={formatCurrency(stats.totalProfit - stats.totalExpenses)}
-          subtitle="Profit minus expenses"
-          icon={<TrendingUp className="w-5 h-5 text-primary" />}
         />
       </div>
     </div>

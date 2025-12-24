@@ -12,6 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Plus, Eye, CreditCard, Edit2, Trash2, Phone, ArrowLeft, X } from 'lucide-react';
 import { Debt, DebtItem, DebtPayment, Customer, generateId } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
@@ -27,6 +37,8 @@ export default function DebtsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [debtToDelete, setDebtToDelete] = useState<string | null>(null);
 
   // New debt form state
   const [newDebtForm, setNewDebtForm] = useState({
@@ -310,12 +322,25 @@ export default function DebtsPage() {
     setIsLoading(false);
   };
 
-  // Delete handler
-  const handleDelete = async (id: string) => {
-    if (await deleteDebt(id)) {
+  // Delete handler - with confirmation
+  const handleDeleteClick = (id: string) => {
+    setDebtToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!debtToDelete) return;
+    if (await deleteDebt(debtToDelete)) {
       toast({ title: "Deleted", description: "Bundle removed" });
       loadData();
     }
+    setDeleteDialogOpen(false);
+    setDebtToDelete(null);
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setDebtToDelete(null);
   };
 
   // Calculate totals
@@ -415,7 +440,7 @@ export default function DebtsPage() {
                     <Edit2 className="w-4 h-4 mr-1" />
                     Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(debt.id)} className="text-destructive hover:text-destructive">
+                  <Button variant="outline" size="sm" onClick={() => handleDeleteClick(debt.id)} className="text-destructive hover:text-destructive">
                     <Trash2 className="w-4 h-4 mr-1" />
                     Delete
                   </Button>
@@ -888,17 +913,36 @@ export default function DebtsPage() {
     );
   };
 
-  // Main render
-  switch (viewMode) {
-    case 'add':
-      return renderAddView();
-    case 'view':
-      return renderViewScreen();
-    case 'edit':
-      return renderEditScreen();
-    case 'payment':
-      return renderPaymentScreen();
-    default:
-      return renderListView();
-  }
+  // Main render with delete confirmation dialog
+  return (
+    <>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this debt? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Main Content */}
+      {viewMode === 'add' && renderAddView()}
+      {viewMode === 'view' && renderViewScreen()}
+      {viewMode === 'edit' && renderEditScreen()}
+      {viewMode === 'payment' && renderPaymentScreen()}
+      {viewMode === 'list' && renderListView()}
+    </>
+  );
 }
