@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateFilter } from '@/contexts/DateFilterContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,10 +23,12 @@ import {
 import { Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { Product, Sale, now } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 export default function SalesPage() {
   const { settings } = useAuth();
   const { getProducts, addSale, getSales, deleteSale } = useData();
+  const { dateRange, isDaily } = useDateFilter();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -37,12 +40,15 @@ export default function SalesPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [dateRange]);
 
   const loadData = async () => {
+    const fromTimestamp = dateRange.fromDate.getTime();
+    const toTimestamp = dateRange.toDate.getTime();
+    
     const [productsData, salesData] = await Promise.all([
       getProducts(),
-      getSales()
+      getSales(fromTimestamp, toTimestamp)
     ]);
     setProducts(productsData);
     setSales(salesData.sort((a, b) => b.date - a.date));
@@ -105,12 +111,14 @@ export default function SalesPage() {
     });
   };
 
+  const dateLabel = isDaily ? "Today's" : "Selected Period";
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Sales</h1>
-          <p className="text-muted-foreground">Record and manage sales</p>
+          <p className="text-muted-foreground">{isDaily ? "Today's sales" : "Sales for selected period"}</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -173,6 +181,9 @@ export default function SalesPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Date Range Filter */}
+      <DateRangeFilter />
 
       {/* Grand Totals - Profit only visible in Profit section */}
       <div className="grand-total-card">

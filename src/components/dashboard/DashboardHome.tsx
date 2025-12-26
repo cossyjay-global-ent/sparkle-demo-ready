@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateFilter } from '@/contexts/DateFilterContext';
 import { 
   ShoppingCart, 
   Package, 
@@ -11,6 +12,7 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { Sale, Expense, Product, Customer, Debt } from '@/lib/database';
 
 interface StatCardProps {
@@ -51,6 +53,7 @@ function StatCard({ title, value, subtitle, icon, trend, trendValue, className }
 export default function DashboardHome() {
   const { settings } = useAuth();
   const { getSales, getExpenses, getProducts, getCustomers, getDebts } = useData();
+  const { dateRange, isDaily } = useDateFilter();
   const [stats, setStats] = useState({
     totalSales: 0,
     totalExpenses: 0,
@@ -59,17 +62,16 @@ export default function DashboardHome() {
     totalDebts: 0,
     totalPaid: 0,
     totalOutstanding: 0,
-    todaySales: 0
+    filteredSales: 0,
+    filteredExpenses: 0
   });
 
   const currency = settings?.currencySymbol || '₦';
 
   useEffect(() => {
     const loadStats = async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStart = today.getTime();
-      const todayEnd = todayStart + 86400000;
+      const fromTimestamp = dateRange.fromDate.getTime();
+      const toTimestamp = dateRange.toDate.getTime();
 
       const [sales, expenses, products, customers, debts] = await Promise.all([
         getSales(),
@@ -84,8 +86,12 @@ export default function DashboardHome() {
       const totalDebts = debts.reduce((sum, d) => sum + d.totalAmount, 0);
       const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
       
-      const todaySalesData = sales.filter(s => s.date >= todayStart && s.date < todayEnd);
-      const todaySales = todaySalesData.reduce((sum, s) => sum + s.totalAmount, 0);
+      // Filter by date range
+      const filteredSalesData = sales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
+      const filteredSales = filteredSalesData.reduce((sum, s) => sum + s.totalAmount, 0);
+
+      const filteredExpensesData = expenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
+      const filteredExpenses = filteredExpensesData.reduce((sum, e) => sum + e.amount, 0);
 
       setStats({
         totalSales,
@@ -95,28 +101,34 @@ export default function DashboardHome() {
         totalDebts,
         totalPaid,
         totalOutstanding: totalDebts - totalPaid,
-        todaySales
+        filteredSales,
+        filteredExpenses
       });
     };
 
     loadStats();
-  }, [getSales, getExpenses, getProducts, getCustomers, getDebts]);
+  }, [getSales, getExpenses, getProducts, getCustomers, getDebts, dateRange]);
 
   const formatCurrency = (amount: number) => {
     return `${currency}${amount.toLocaleString()}`;
   };
 
+  const dateLabel = isDaily ? "Today's" : "Selected Period";
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Today's overview</p>
+        <p className="text-muted-foreground">{isDaily ? "Today's overview" : "Custom date range overview"}</p>
       </div>
 
-      {/* Today's Stats */}
+      {/* Date Range Filter */}
+      <DateRangeFilter />
+
+      {/* Selected Period Stats */}
       <div className="grand-total-card">
-        <p className="text-primary-foreground/80 text-sm mb-1">Today's Sales</p>
-        <p className="text-3xl font-bold">{formatCurrency(stats.todaySales)}</p>
+        <p className="text-primary-foreground/80 text-sm mb-1">{dateLabel} Sales</p>
+        <p className="text-3xl font-bold">{formatCurrency(stats.filteredSales)}</p>
       </div>
 
       {/* Stats Grid */}
