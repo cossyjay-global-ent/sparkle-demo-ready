@@ -39,6 +39,34 @@ export default function SalesPage() {
   const [manualProductName, setManualProductName] = useState('');
   const [manualUnitPrice, setManualUnitPrice] = useState('');
   const [manualCostPrice, setManualCostPrice] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Filter products matching the manual input name
+  const matchingProducts = products.filter(p => 
+    manualProductName.trim() && 
+    p.name.toLowerCase().includes(manualProductName.toLowerCase().trim())
+  );
+
+  // Handle product name change and auto-fill cost price
+  const handleManualProductNameChange = (value: string) => {
+    setManualProductName(value);
+    setShowSuggestions(true);
+    
+    // Find exact match or first matching product to auto-fill cost price
+    const exactMatch = products.find(p => p.name.toLowerCase() === value.toLowerCase().trim());
+    if (exactMatch) {
+      setManualCostPrice(exactMatch.costPrice.toString());
+      setManualUnitPrice(exactMatch.sellingPrice.toString());
+    }
+  };
+
+  // Select a suggested product
+  const handleSelectSuggestion = (product: Product) => {
+    setManualProductName(product.name);
+    setManualCostPrice(product.costPrice.toString());
+    setManualUnitPrice(product.sellingPrice.toString());
+    setShowSuggestions(false);
+  };
 
   const currency = settings?.currencySymbol || '₦';
 
@@ -218,15 +246,35 @@ export default function SalesPage() {
                 </div>
               ) : (
                 <>
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
                     <Label>Product Name</Label>
                     <Input
                       type="text"
                       placeholder="Enter product name"
                       value={manualProductName}
-                      onChange={(e) => setManualProductName(e.target.value)}
+                      onChange={(e) => handleManualProductNameChange(e.target.value)}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                       className="input-styled"
                     />
+                    {/* Product suggestions dropdown */}
+                    {showSuggestions && matchingProducts.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-48 overflow-auto">
+                        {matchingProducts.map(product => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-left hover:bg-muted flex justify-between items-center"
+                            onMouseDown={() => handleSelectSuggestion(product)}
+                          >
+                            <span className="font-medium">{product.name}</span>
+                            <span className="text-sm text-muted-foreground">
+                              Stock: {product.stock}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
