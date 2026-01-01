@@ -35,6 +35,10 @@ export default function SalesPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [isLoading, setIsLoading] = useState(false);
+  const [isManualInput, setIsManualInput] = useState(false);
+  const [manualProductName, setManualProductName] = useState('');
+  const [manualUnitPrice, setManualUnitPrice] = useState('');
+  const [manualCostPrice, setManualCostPrice] = useState('');
 
   const currency = settings?.currencySymbol || '₦';
 
@@ -57,39 +61,81 @@ export default function SalesPage() {
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
   const handleAddSale = async () => {
-    if (!selectedProduct || !quantity) return;
-    
     const qty = parseInt(quantity);
     if (qty <= 0) {
       toast({ title: "Error", description: "Quantity must be greater than 0", variant: "destructive" });
       return;
     }
 
-    if (qty > selectedProduct.stock) {
-      toast({ title: "Error", description: "Not enough stock available", variant: "destructive" });
-      return;
-    }
+    if (isManualInput) {
+      // Manual input validation
+      if (!manualProductName.trim()) {
+        toast({ title: "Error", description: "Please enter a product name", variant: "destructive" });
+        return;
+      }
+      const unitPrice = parseFloat(manualUnitPrice);
+      const costPrice = parseFloat(manualCostPrice) || 0;
+      if (isNaN(unitPrice) || unitPrice <= 0) {
+        toast({ title: "Error", description: "Please enter a valid unit price", variant: "destructive" });
+        return;
+      }
 
-    setIsLoading(true);
-    const sale = await addSale({
-      productId: selectedProduct.id,
-      productName: selectedProduct.name,
-      quantity: qty,
-      unitPrice: selectedProduct.sellingPrice,
-      costPrice: selectedProduct.costPrice,
-      totalAmount: selectedProduct.sellingPrice * qty,
-      profit: (selectedProduct.sellingPrice - selectedProduct.costPrice) * qty,
-      date: now()
-    });
+      setIsLoading(true);
+      const sale = await addSale({
+        productId: undefined,
+        productName: manualProductName.trim(),
+        quantity: qty,
+        unitPrice: unitPrice,
+        costPrice: costPrice,
+        totalAmount: unitPrice * qty,
+        profit: (unitPrice - costPrice) * qty,
+        date: now()
+      });
 
-    if (sale) {
-      toast({ title: "Success", description: "Sale recorded successfully" });
-      setIsDialogOpen(false);
-      setSelectedProductId('');
-      setQuantity('1');
-      loadData();
+      if (sale) {
+        toast({ title: "Success", description: "Sale recorded successfully" });
+        resetForm();
+        loadData();
+      }
+      setIsLoading(false);
+    } else {
+      // Product selection validation
+      if (!selectedProduct) return;
+
+      if (qty > selectedProduct.stock) {
+        toast({ title: "Error", description: "Not enough stock available", variant: "destructive" });
+        return;
+      }
+
+      setIsLoading(true);
+      const sale = await addSale({
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        quantity: qty,
+        unitPrice: selectedProduct.sellingPrice,
+        costPrice: selectedProduct.costPrice,
+        totalAmount: selectedProduct.sellingPrice * qty,
+        profit: (selectedProduct.sellingPrice - selectedProduct.costPrice) * qty,
+        date: now()
+      });
+
+      if (sale) {
+        toast({ title: "Success", description: "Sale recorded successfully" });
+        resetForm();
+        loadData();
+      }
+      setIsLoading(false);
     }
-    setIsLoading(false);
+  };
+
+  const resetForm = () => {
+    setIsDialogOpen(false);
+    setSelectedProductId('');
+    setQuantity('1');
+    setIsManualInput(false);
+    setManualProductName('');
+    setManualUnitPrice('');
+    setManualCostPrice('');
   };
 
   const handleDeleteSale = async (id: string) => {
@@ -132,33 +178,99 @@ export default function SalesPage() {
               <DialogTitle>Record New Sale</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label>Product</Label>
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a product" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.filter(p => p.stock > 0).map(product => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} - {currency}{product.sellingPrice} (Stock: {product.stock})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Toggle between select and manual input */}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={!isManualInput ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsManualInput(false)}
+                  className="flex-1"
+                >
+                  Select Product
+                </Button>
+                <Button
+                  type="button"
+                  variant={isManualInput ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setIsManualInput(true)}
+                  className="flex-1"
+                >
+                  Manual Input
+                </Button>
               </div>
+
+              {!isManualInput ? (
+                <div className="space-y-2">
+                  <Label>Product</Label>
+                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.filter(p => p.stock > 0).map(product => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name} - {currency}{product.sellingPrice} (Stock: {product.stock})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Product Name</Label>
+                    <Input
+                      type="text"
+                      placeholder="Enter product name"
+                      value={manualProductName}
+                      onChange={(e) => setManualProductName(e.target.value)}
+                      className="input-styled"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Unit Price ({currency})</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={manualUnitPrice}
+                        onChange={(e) => setManualUnitPrice(e.target.value)}
+                        className="input-styled"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cost Price ({currency})</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00 (optional)"
+                        value={manualCostPrice}
+                        onChange={(e) => setManualCostPrice(e.target.value)}
+                        className="input-styled"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                 <Label>Quantity</Label>
                 <Input
                   type="number"
                   min="1"
-                  max={selectedProduct?.stock || 1}
+                  max={!isManualInput && selectedProduct ? selectedProduct.stock : undefined}
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   className="input-styled"
                 />
               </div>
-              {selectedProduct && (
+
+              {/* Summary for selected product */}
+              {!isManualInput && selectedProduct && (
                 <div className="p-4 bg-muted rounded-lg space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Unit Price:</span>
@@ -170,9 +282,29 @@ export default function SalesPage() {
                   </div>
                 </div>
               )}
+
+              {/* Summary for manual input */}
+              {isManualInput && manualUnitPrice && (
+                <div className="p-4 bg-muted rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Unit Price:</span>
+                    <span className="font-medium">{currency}{parseFloat(manualUnitPrice) || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-bold text-lg">{currency}{(parseFloat(manualUnitPrice) || 0) * parseInt(quantity || '0')}</span>
+                  </div>
+                  {manualCostPrice && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Profit:</span>
+                      <span className="font-medium text-green-600">{currency}{((parseFloat(manualUnitPrice) || 0) - (parseFloat(manualCostPrice) || 0)) * parseInt(quantity || '0')}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <Button
                 onClick={handleAddSale}
-                disabled={!selectedProductId || isLoading}
+                disabled={isManualInput ? (!manualProductName || !manualUnitPrice || isLoading) : (!selectedProductId || isLoading)}
                 className="w-full btn-primary-gradient"
               >
                 Record Sale
