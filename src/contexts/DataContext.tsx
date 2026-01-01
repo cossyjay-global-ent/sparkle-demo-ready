@@ -110,14 +110,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       };
       await db.sales.add(sale);
 
-      // Update product stock
-      const product = await db.products.get(data.productId);
-      if (product) {
-        await db.products.update(product.id, {
-          stock: Math.max(0, product.stock - data.quantity),
-          updatedAt: now(),
-          syncStatus: 'pending'
-        });
+      // Update product stock only if productId is provided (not manual input)
+      if (data.productId) {
+        const product = await db.products.get(data.productId);
+        if (product) {
+          await db.products.update(product.id, {
+            stock: Math.max(0, product.stock - data.quantity),
+            updatedAt: now(),
+            syncStatus: 'pending'
+          });
+        }
       }
 
       await logAction('create', 'sales', sale.id, `Sale recorded: ${sale.productName} x${sale.quantity}`, undefined, sale);
