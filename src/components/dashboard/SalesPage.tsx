@@ -33,7 +33,7 @@ export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [quantity, setQuantity] = useState('1');
+  const [quantity, setQuantity] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
   const [manualProductName, setManualProductName] = useState('');
@@ -47,24 +47,22 @@ export default function SalesPage() {
     p.name.toLowerCase().includes(manualProductName.toLowerCase().trim())
   );
 
-  // Handle product name change and auto-fill cost price
+  // Handle product name change and auto-fill cost price only
   const handleManualProductNameChange = (value: string) => {
     setManualProductName(value);
     setShowSuggestions(true);
     
-    // Find exact match or first matching product to auto-fill cost price
+    // Find exact match to auto-fill cost price only (unit price stays manual)
     const exactMatch = products.find(p => p.name.toLowerCase() === value.toLowerCase().trim());
     if (exactMatch) {
       setManualCostPrice(exactMatch.costPrice.toString());
-      setManualUnitPrice(exactMatch.sellingPrice.toString());
     }
   };
 
-  // Select a suggested product
+  // Select a suggested product (only auto-fill cost price, not unit price)
   const handleSelectSuggestion = (product: Product) => {
     setManualProductName(product.name);
     setManualCostPrice(product.costPrice.toString());
-    setManualUnitPrice(product.sellingPrice.toString());
     setShowSuggestions(false);
   };
 
@@ -89,7 +87,7 @@ export default function SalesPage() {
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
   const handleAddSale = async () => {
-    const qty = parseInt(quantity);
+    const qty = parseInt(quantity) || 1; // Default to 1 if empty
     if (qty <= 0) {
       toast({ title: "Error", description: "Quantity must be greater than 0", variant: "destructive" });
       return;
@@ -159,7 +157,7 @@ export default function SalesPage() {
   const resetForm = () => {
     setIsDialogOpen(false);
     setSelectedProductId('');
-    setQuantity('1');
+    setQuantity('');
     setIsManualInput(false);
     setManualProductName('');
     setManualUnitPrice('');
@@ -311,6 +309,7 @@ export default function SalesPage() {
                   type="number"
                   min="1"
                   max={!isManualInput && selectedProduct ? selectedProduct.stock : undefined}
+                  placeholder="1"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   className="input-styled"
