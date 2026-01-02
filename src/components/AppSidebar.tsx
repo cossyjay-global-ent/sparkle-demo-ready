@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -15,21 +15,28 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Shield
+  Shield,
+  Settings,
+  User,
+  HelpCircle,
+  Info,
+  Download
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 export function AppSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const { logout, isOnline } = useAuth();
   const { role, canViewProfit, canViewAuditLogs } = useRBAC();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const navItems = [
+  const mainNavItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
     { path: '/dashboard/sales', label: 'Sales', icon: ShoppingCart, show: true },
     { path: '/dashboard/products', label: 'Products', icon: Package, show: true },
@@ -41,11 +48,24 @@ export function AppSidebar() {
     { path: '/dashboard/audit-logs', label: 'Audit Logs', icon: Shield, show: canViewAuditLogs },
   ];
 
+  const secondaryNavItems = [
+    { path: '/settings', label: 'Settings', icon: Settings },
+    { path: '/profile', label: 'Profile', icon: User },
+    { path: '/install', label: 'Install App', icon: Download },
+    { path: '/support', label: 'Help & Support', icon: HelpCircle },
+    { path: '/about', label: 'About', icon: Info },
+  ];
+
   const isActive = (path: string) => {
     if (path === '/dashboard') {
       return location.pathname === '/dashboard';
     }
     return location.pathname.startsWith(path);
+  };
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    setIsOpen(false);
   };
 
   return (
@@ -76,18 +96,23 @@ export function AppSidebar() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed left-0 top-0 h-full w-64 bg-sidebar-background border-r border-sidebar-border z-50 transition-transform duration-300 ease-out lg:translate-x-0 lg:static",
+        "fixed left-0 top-0 h-full w-64 bg-sidebar-background border-r border-sidebar-border z-50 transition-transform duration-300 ease-out lg:translate-x-0 lg:static flex flex-col",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Sidebar Header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-2">
-            <h2 className="font-bold text-lg text-sidebar-foreground">Offline POS</h2>
-            {role && (
-              <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs">
-                {role}
-              </Badge>
-            )}
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-bold text-sm text-sidebar-foreground">Offline POS</h2>
+              {role && (
+                <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                  {role}
+                </Badge>
+              )}
+            </div>
           </div>
           <Button
             variant="ghost"
@@ -100,7 +125,7 @@ export function AppSidebar() {
         </div>
 
         {/* Sync Status */}
-        <div className="px-4 py-3 border-b border-sidebar-border">
+        <div className="px-4 py-3 border-b border-sidebar-border flex-shrink-0">
           <div className={`sync-indicator w-full justify-center ${isOnline ? 'sync-online' : 'sync-offline'}`}>
             {isOnline ? (
               <>
@@ -116,9 +141,12 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* Main Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          {navItems.filter(item => item.show).map((item) => (
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+            Main Menu
+          </p>
+          {mainNavItems.filter(item => item.show).map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -133,10 +161,29 @@ export function AppSidebar() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+
+          <Separator className="my-4" />
+
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+            More
+          </p>
+          {secondaryNavItems.map((item) => (
+            <button
+              key={item.path}
+              onClick={() => handleNavigation(item.path)}
+              className={cn(
+                "nav-link w-full",
+                isActive(item.path) && "active"
+              )}
+            >
+              <item.icon className="w-5 h-5" />
+              <span>{item.label}</span>
+            </button>
+          ))}
         </nav>
 
-        {/* Sync Button */}
-        <div className="p-4 border-t border-sidebar-border">
+        {/* Footer Actions */}
+        <div className="p-4 border-t border-sidebar-border flex-shrink-0">
           <Button
             variant="outline"
             className="w-full mb-2"

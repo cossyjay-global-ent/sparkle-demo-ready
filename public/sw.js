@@ -1,19 +1,23 @@
-const CACHE_NAME = 'offline-pos-v1';
-const STATIC_CACHE = 'offline-pos-static-v1';
-const DYNAMIC_CACHE = 'offline-pos-dynamic-v1';
+const CACHE_NAME = 'offline-pos-v2';
+const STATIC_CACHE = 'offline-pos-static-v2';
+const DYNAMIC_CACHE = 'offline-pos-dynamic-v2';
 
-// Assets to cache immediately
+// Core assets to cache immediately
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon-72x72.svg',
+  '/icons/icon-192x192.svg',
+  '/icons/icon-512x512.svg',
+  '/icons/icon-maskable.svg'
 ];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      console.log('Caching static assets');
+      console.log('[SW] Caching static assets');
       return cache.addAll(STATIC_ASSETS);
     })
   );
@@ -26,8 +30,11 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((key) => key !== STATIC_CACHE && key !== DYNAMIC_CACHE)
-          .map((key) => caches.delete(key))
+          .filter((key) => !key.includes('v2'))
+          .map((key) => {
+            console.log('[SW] Deleting old cache:', key);
+            return caches.delete(key);
+          })
       );
     })
   );
@@ -54,10 +61,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // For navigation requests, try network first, then cache
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseClone = response.clone();
+          caches.open(DYNAMIC_CACHE).then((cache) => {
+            cache.put(request, responseClone);
+          });
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/');
+          });
+        })
+    );
+    return;
+  }
+
+  // For other requests, try cache first, then network
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Return cached response and update cache in background
+        // Update cache in background
         event.waitUntil(
           fetch(request)
             .then((response) => {
@@ -88,9 +116,12 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // Offline and not in cache - return offline page for navigation
-          if (request.mode === 'navigate') {
-            return caches.match('/');
+          // Return offline fallback for images
+          if (request.destination === 'image') {
+            return new Response(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="#f0f0f0" width="100" height="100"/><text fill="#999" x="50" y="50" text-anchor="middle">Offline</text></svg>',
+              { headers: { 'Content-Type': 'image/svg+xml' } }
+            );
           }
           return new Response('Offline', { status: 503 });
         });
@@ -106,22 +137,41 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncData() {
-  // This will be handled by the app's sync logic
-  console.log('Background sync triggered');
+  console.log('[SW] Background sync triggered');
   const clients = await self.clients.matchAll();
   clients.forEach((client) => {
     client.postMessage({ type: 'SYNC_TRIGGERED' });
   });
 }
 
-// Push notifications (for future use)
+// Handle messages from the app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Push notifications
 self.addEventListener('push', (event) => {
   if (event.data) {
     const data = event.data.json();
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png'
+    self.registration.showNotification(data.title || 'Offline POS', {
+      body: data.body || 'You have a new notification',
+      icon: '/icons/icon-192x192.svg',
+      badge: '/icons/icon-72x72.svg',
+      vibrate: [100, 50, 100],
+      data: {
+        dateOfArrival: Date.now(),
+        primaryKey: 1
+      }
     });
   }
+});
+
+// Notification click handler
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow('/')
+  );
 });
