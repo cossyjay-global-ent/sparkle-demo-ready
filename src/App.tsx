@@ -11,6 +11,10 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Install from "./pages/Install";
+import About from "./pages/About";
+import Support from "./pages/Support";
+import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { useEffect } from "react";
 
@@ -23,6 +27,19 @@ function registerServiceWorker() {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           console.log('SW registered:', registration);
+          
+          // Check for updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New version available
+                  console.log('New version available');
+                }
+              });
+            }
+          });
         })
         .catch((error) => {
           console.log('SW registration failed:', error);
@@ -49,8 +66,14 @@ const App = () => {
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/auth/login" element={<Auth />} />
+                    <Route path="/auth/register" element={<Auth />} />
                     <Route path="/dashboard/*" element={<Dashboard />} />
                     <Route path="/install" element={<Install />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/support" element={<Support />} />
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/profile" element={<Profile />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </BrowserRouter>
