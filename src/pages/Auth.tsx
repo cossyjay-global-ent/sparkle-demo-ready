@@ -23,7 +23,10 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      // Redirect to intended destination or dashboard
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+      sessionStorage.removeItem('redirectAfterLogin');
+      navigate(redirectTo);
     }
   }, [user, navigate]);
 
@@ -36,7 +39,11 @@ const Auth = () => {
     setIsLoading(true);
     const success = await login(loginEmail, loginPassword);
     setIsLoading(false);
-    if (success) navigate('/dashboard');
+    if (success) {
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+      sessionStorage.removeItem('redirectAfterLogin');
+      navigate(redirectTo);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -47,7 +54,11 @@ const Auth = () => {
     setIsLoading(true);
     const success = await signup(signupEmail, signupPassword);
     setIsLoading(false);
-    if (success) navigate('/dashboard');
+    if (success) {
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+      sessionStorage.removeItem('redirectAfterLogin');
+      navigate(redirectTo);
+    }
   };
 
   return (

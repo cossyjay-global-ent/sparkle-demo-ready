@@ -1,6 +1,7 @@
-const CACHE_NAME = 'offline-pos-v2';
-const STATIC_CACHE = 'offline-pos-static-v2';
-const DYNAMIC_CACHE = 'offline-pos-dynamic-v2';
+const APP_VERSION = '1.0.0';
+const CACHE_NAME = `offline-pos-v${APP_VERSION}`;
+const STATIC_CACHE = `offline-pos-static-v${APP_VERSION}`;
+const DYNAMIC_CACHE = `offline-pos-dynamic-v${APP_VERSION}`;
 
 // Core assets to cache immediately
 const STATIC_ASSETS = [
@@ -15,6 +16,7 @@ const STATIC_ASSETS = [
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
+  console.log('[SW] Installing version:', APP_VERSION);
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       console.log('[SW] Caching static assets');
@@ -26,11 +28,15 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
+  console.log('[SW] Activating version:', APP_VERSION);
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((key) => !key.includes('v2'))
+          .filter((key) => {
+            // Delete caches that don't match current version
+            return !key.includes(APP_VERSION);
+          })
           .map((key) => {
             console.log('[SW] Deleting old cache:', key);
             return caches.delete(key);
