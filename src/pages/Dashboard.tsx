@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -17,26 +16,19 @@ import AuditLogsPage from '@/components/dashboard/AuditLogsPage';
 const Dashboard = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { isLoading: rbacLoading } = useRBAC();
-  const navigate = useNavigate();
 
   const isLoading = authLoading || rbacLoading;
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate('/auth');
-    }
-  }, [user, isLoading, navigate]);
-
+  // Only show loading during RBAC initialization (auth is already handled by ProtectedRoute)
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return null;
   }
 
   return (

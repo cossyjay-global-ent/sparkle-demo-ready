@@ -7,6 +7,10 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { UpdateNotification } from "@/components/UpdateNotification";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -18,7 +22,14 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { useEffect } from "react";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 // Register service worker
 function registerServiceWorker() {
@@ -54,35 +65,51 @@ const App = () => {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <RBACProvider>
-            <DateFilterProvider>
-              <DataProvider>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/auth" element={<Auth />} />
-                    <Route path="/auth/login" element={<Auth />} />
-                    <Route path="/auth/register" element={<Auth />} />
-                    <Route path="/dashboard/*" element={<Dashboard />} />
-                    <Route path="/install" element={<Install />} />
-                    <Route path="/about" element={<About />} />
-                    <Route path="/support" element={<Support />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </DataProvider>
-            </DateFilterProvider>
-          </RBACProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <RBACProvider>
+              <DateFilterProvider>
+                <DataProvider>
+                  <Toaster />
+                  <Sonner />
+                  <UpdateNotification />
+                  <OfflineIndicator />
+                  <BrowserRouter>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/auth/login" element={<Auth />} />
+                      <Route path="/auth/register" element={<Auth />} />
+                      <Route path="/dashboard/*" element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/install" element={<Install />} />
+                      <Route path="/about" element={<About />} />
+                      <Route path="/support" element={<Support />} />
+                      <Route path="/settings" element={
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/profile" element={
+                        <ProtectedRoute>
+                          <Profile />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </BrowserRouter>
+                </DataProvider>
+              </DateFilterProvider>
+            </RBACProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

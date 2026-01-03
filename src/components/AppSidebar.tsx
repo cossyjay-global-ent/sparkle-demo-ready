@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -29,12 +29,57 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export function AppSidebar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const { logout, isOnline } = useAuth();
   const { role, canViewProfit, canViewAuditLogs } = useRBAC();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Check if app is in standalone mode (installed)
+  useEffect(() => {
+    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches);
+    
+    // Listen for install prompt
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setCanInstall(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', () => {
+      setCanInstall(false);
+      setIsStandalone(true);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  // Close sidebar when route changes (mobile)
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  // Prevent body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   const mainNavItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
@@ -48,12 +93,13 @@ export function AppSidebar() {
     { path: '/dashboard/audit-logs', label: 'Audit Logs', icon: Shield, show: canViewAuditLogs },
   ];
 
+  // Only show Install App if not installed and can install
   const secondaryNavItems = [
-    { path: '/settings', label: 'Settings', icon: Settings },
-    { path: '/profile', label: 'Profile', icon: User },
-    { path: '/install', label: 'Install App', icon: Download },
-    { path: '/support', label: 'Help & Support', icon: HelpCircle },
-    { path: '/about', label: 'About', icon: Info },
+    { path: '/settings', label: 'Settings', icon: Settings, show: true },
+    { path: '/profile', label: 'Profile', icon: User, show: true },
+    { path: '/install', label: 'Install App', icon: Download, show: !isStandalone && canInstall },
+    { path: '/support', label: 'Help & Support', icon: HelpCircle, show: true },
+    { path: '/about', label: 'About', icon: Info, show: true },
   ];
 
   const isActive = (path: string) => {
@@ -167,7 +213,7 @@ export function AppSidebar() {
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
             More
           </p>
-          {secondaryNavItems.map((item) => (
+          {secondaryNavItems.filter(item => item.show).map((item) => (
             <button
               key={item.path}
               onClick={() => handleNavigation(item.path)}
