@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -34,7 +34,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-export function AppSidebar() {
+export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  function AppSidebar(props, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -250,4 +251,6 @@ export function AppSidebar() {
       </aside>
     </>
   );
-}
+});
+
+AppSidebar.displayName = 'AppSidebar';
