@@ -48,52 +48,89 @@ function isSameDay(date1: Date, date2: Date): boolean {
 
 export function DateFilterProvider({ children }: { children: React.ReactNode }) {
   const { isAdmin } = useRBAC();
+  // ALWAYS initialize with today's range (Daily default)
   const [dateRange, setDateRangeState] = useState<DateRange>(getTodayRange);
 
-  // Reset to daily on mount, login, logout, app refresh
+  // Reset to daily on mount - ALWAYS enforce daily on app load/refresh
   useEffect(() => {
-    resetToDaily();
+    const todayRange = getTodayRange();
+    setDateRangeState(todayRange);
+    try {
+      localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
+        fromDate: todayRange.fromDate.toISOString(),
+        toDate: todayRange.toDate.toISOString()
+      }));
+    } catch (error) {
+      console.error('Error saving date filter on mount:', error);
+    }
   }, []);
 
-  // Listen for online/offline changes and reset to daily
+  // Listen for online/offline changes and reset to daily on reconnection
   useEffect(() => {
     const handleOnline = () => {
-      // Sync and reset to daily on reconnection
-      resetToDaily();
+      // Reset to daily on reconnection for consistency
+      const todayRange = getTodayRange();
+      setDateRangeState(todayRange);
+      try {
+        localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
+          fromDate: todayRange.fromDate.toISOString(),
+          toDate: todayRange.toDate.toISOString()
+        }));
+      } catch (error) {
+        console.error('Error saving date filter on reconnection:', error);
+      }
     };
 
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // Persist date filter to localStorage for offline support
+  // Listen for visibility change (PWA relaunch) and enforce daily
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(DATE_FILTER_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Validate stored data
-        if (parsed.fromDate && parsed.toDate) {
-          const fromDate = new Date(parsed.fromDate);
-          const toDate = new Date(parsed.toDate);
-          
-          // Check if dates are valid
-          if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
-            // For staff, always use daily
-            if (!isAdmin) {
-              resetToDaily();
-            } else {
-              setDateRangeState({ fromDate, toDate });
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Check if it's a new day since last visit
+        const stored = localStorage.getItem(DATE_FILTER_STORAGE_KEY);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            const storedFrom = new Date(parsed.fromDate);
+            const today = new Date();
+            // If stored date is not today, reset to daily
+            if (!isSameDay(storedFrom, today)) {
+              const todayRange = getTodayRange();
+              setDateRangeState(todayRange);
+              localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
+                fromDate: todayRange.fromDate.toISOString(),
+                toDate: todayRange.toDate.toISOString()
+              }));
             }
-            return;
+          } catch (error) {
+            // If error, reset to daily
+            const todayRange = getTodayRange();
+            setDateRangeState(todayRange);
           }
         }
       }
-      // If no valid stored data, use daily
-      resetToDaily();
-    } catch (error) {
-      console.error('Error loading date filter:', error);
-      resetToDaily();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Enforce daily for staff users whenever isAdmin changes
+  useEffect(() => {
+    if (!isAdmin) {
+      const todayRange = getTodayRange();
+      setDateRangeState(todayRange);
+      try {
+        localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
+          fromDate: todayRange.fromDate.toISOString(),
+          toDate: todayRange.toDate.toISOString()
+        }));
+      } catch (error) {
+        console.error('Error enforcing daily for staff:', error);
+      }
     }
   }, [isAdmin]);
 

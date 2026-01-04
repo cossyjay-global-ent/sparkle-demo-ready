@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, forwardRef } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
@@ -15,40 +15,43 @@ import { Card } from '@/components/ui/card';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { Sale, Expense, Product, Customer, Debt } from '@/lib/database';
 
-interface StatCardProps {
+interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   value: string;
   subtitle?: string;
   icon: React.ReactNode;
   trend?: 'up' | 'down';
   trendValue?: string;
-  className?: string;
 }
 
-function StatCard({ title, value, subtitle, icon, trend, trendValue, className }: StatCardProps) {
-  return (
-    <Card className={`stat-card ${className || ''}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground mb-1">{title}</p>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-          )}
-          {trend && trendValue && (
-            <div className={`flex items-center gap-1 mt-2 text-xs ${trend === 'up' ? 'text-success' : 'text-destructive'}`}>
-              {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-              <span>{trendValue}</span>
-            </div>
-          )}
+const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
+  function StatCard({ title, value, subtitle, icon, trend, trendValue, className, ...props }, ref) {
+    return (
+      <Card ref={ref} className={`stat-card ${className || ''}`} {...props}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">{title}</p>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+            )}
+            {trend && trendValue && (
+              <div className={`flex items-center gap-1 mt-2 text-xs ${trend === 'up' ? 'text-success' : 'text-destructive'}`}>
+                {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                <span>{trendValue}</span>
+              </div>
+            )}
+          </div>
+          <div className="p-3 rounded-xl bg-primary/10">
+            {icon}
+          </div>
         </div>
-        <div className="p-3 rounded-xl bg-primary/10">
-          {icon}
-        </div>
-      </div>
-    </Card>
-  );
-}
+      </Card>
+    );
+  }
+);
+
+StatCard.displayName = 'StatCard';
 
 export default function DashboardHome() {
   const { settings } = useAuth();
