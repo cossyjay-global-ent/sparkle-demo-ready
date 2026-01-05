@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,8 +17,9 @@ import { Sale } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
 
 export default function ProfitPage() {
-  const { settings, hasProfitPassword, setProfitPassword, verifyProfitPassword } = useAuth();
+  const { hasProfitPassword, setProfitPassword, verifyProfitPassword } = useAuth();
   const { getSales, getExpenses } = useData();
+  const { currency } = useCurrency();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [showVerifyPassword, setShowVerifyPassword] = useState(false);
@@ -28,7 +30,7 @@ export default function ProfitPage() {
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  const currency = settings?.currencySymbol || '₦';
+  const currencySymbol = currency.symbol;
 
   useEffect(() => {
     if (!hasProfitPassword()) {
@@ -224,16 +226,16 @@ export default function ProfitPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="grand-total-card">
           <p className="text-primary-foreground/80 text-sm">Total Profit</p>
-          <p className="text-3xl font-bold">{currency}{totalProfit.toLocaleString()}</p>
+          <p className="text-3xl font-bold">{currencySymbol}{totalProfit.toLocaleString()}</p>
         </div>
         <Card className="stat-card bg-destructive/10 border-destructive/20">
           <p className="text-sm text-destructive">Total Expenses</p>
-          <p className="text-2xl font-bold text-destructive">{currency}{totalExpenses.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-destructive">{currencySymbol}{totalExpenses.toLocaleString()}</p>
         </Card>
         <Card className={`stat-card ${netProfit >= 0 ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/20'}`}>
           <p className={`text-sm ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>Net Profit</p>
           <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {currency}{netProfit.toLocaleString()}
+            {currencySymbol}{netProfit.toLocaleString()}
           </p>
         </Card>
       </div>
@@ -244,15 +246,15 @@ export default function ProfitPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="stat-card">
             <p className="text-sm text-muted-foreground">Today</p>
-            <p className="text-2xl font-bold text-success">{currency}{todayProfit.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-success">{currencySymbol}{todayProfit.toLocaleString()}</p>
           </Card>
           <Card className="stat-card">
             <p className="text-sm text-muted-foreground">This Week</p>
-            <p className="text-2xl font-bold text-success">{currency}{weekProfit.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-success">{currencySymbol}{weekProfit.toLocaleString()}</p>
           </Card>
           <Card className="stat-card">
             <p className="text-sm text-muted-foreground">This Month</p>
-            <p className="text-2xl font-bold text-success">{currency}{monthProfit.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-success">{currencySymbol}{monthProfit.toLocaleString()}</p>
           </Card>
         </div>
       </div>
@@ -287,9 +289,9 @@ export default function ProfitPage() {
                   <tr key={sale.id} className="table-row-hover border-t border-border">
                     <td className="p-4 font-medium">{sale.productName}</td>
                     <td className="p-4">{sale.quantity}</td>
-                    <td className="p-4">{currency}{sale.totalAmount.toLocaleString()}</td>
-                    <td className="p-4 text-muted-foreground">{currency}{(sale.costPrice * sale.quantity).toLocaleString()}</td>
-                    <td className="p-4 text-success font-medium">{currency}{sale.profit.toLocaleString()}</td>
+                    <td className="p-4">{currencySymbol}{sale.totalAmount.toLocaleString()}</td>
+                    <td className="p-4 text-muted-foreground">{currencySymbol}{(sale.costPrice * sale.quantity).toLocaleString()}</td>
+                    <td className="p-4 text-success font-medium">{currencySymbol}{sale.profit.toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                   </tr>
                 ))

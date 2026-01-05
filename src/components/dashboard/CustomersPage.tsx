@@ -1,5 +1,6 @@
 import { useState, useEffect, forwardRef } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ type ViewMode = 'list' | 'view';
 
 const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
   const { getCustomers, addCustomer, updateCustomer, deleteCustomer, getDebts } = useData();
+  const { currency } = useCurrency();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +140,7 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
   };
 
   const formatCurrency = (amount: number) => {
-    return `NGN ${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currency.symbol}${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (timestamp: number) => {

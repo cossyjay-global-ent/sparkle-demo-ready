@@ -3,10 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DataProvider } from "@/contexts/DataContext";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UpdateNotification } from "@/components/UpdateNotification";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
@@ -66,49 +68,53 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <AuthProvider>
-            <RBACProvider>
-              <DateFilterProvider>
-                <DataProvider>
-                  <Toaster />
-                  <Sonner />
-                  <UpdateNotification />
-                  <OfflineIndicator />
-                  <BrowserRouter>
-                    <Routes>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/auth" element={<Auth />} />
-                      <Route path="/auth/login" element={<Auth />} />
-                      <Route path="/auth/register" element={<Auth />} />
-                      <Route path="/dashboard/*" element={
-                        <ProtectedRoute>
-                          <Dashboard />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/install" element={<Install />} />
-                      <Route path="/about" element={<About />} />
-                      <Route path="/support" element={<Support />} />
-                      <Route path="/settings" element={
-                        <ProtectedRoute>
-                          <Settings />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="/profile" element={
-                        <ProtectedRoute>
-                          <Profile />
-                        </ProtectedRoute>
-                      } />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </BrowserRouter>
-                </DataProvider>
-              </DateFilterProvider>
-            </RBACProvider>
-          </AuthProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AuthProvider>
+              <RBACProvider>
+                <DateFilterProvider>
+                  <CurrencyProvider>
+                    <DataProvider>
+                      <Toaster />
+                      <Sonner />
+                      <UpdateNotification />
+                      <OfflineIndicator />
+                      <BrowserRouter>
+                        <Routes>
+                          <Route path="/" element={<Index />} />
+                          <Route path="/auth" element={<Auth />} />
+                          <Route path="/auth/login" element={<Auth />} />
+                          <Route path="/auth/register" element={<Auth />} />
+                          <Route path="/dashboard/*" element={
+                            <ProtectedRoute>
+                              <Dashboard />
+                            </ProtectedRoute>
+                          } />
+                          <Route path="/install" element={<Install />} />
+                          <Route path="/about" element={<About />} />
+                          <Route path="/support" element={<Support />} />
+                          <Route path="/settings" element={
+                            <ProtectedRoute>
+                              <Settings />
+                            </ProtectedRoute>
+                          } />
+                          <Route path="/profile" element={
+                            <ProtectedRoute>
+                              <Profile />
+                            </ProtectedRoute>
+                          } />
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                      </BrowserRouter>
+                    </DataProvider>
+                  </CurrencyProvider>
+                </DateFilterProvider>
+              </RBACProvider>
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 };

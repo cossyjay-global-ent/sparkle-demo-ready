@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useRBAC } from '@/contexts/RBACContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,7 @@ type ViewMode = 'list' | 'add' | 'view' | 'edit' | 'payment';
 export default function DebtsPage() {
   const { getDebts, addDebt, updateDebt, deleteDebt, getDebtPayments, addDebtPayment, getCustomers, addCustomer } = useData();
   const { canDeleteDebt } = useRBAC();
+  const { currency } = useCurrency();
   const [debts, setDebts] = useState<Debt[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
@@ -75,7 +77,7 @@ export default function DebtsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currency.symbol}${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (timestamp: number) => {
@@ -302,7 +304,7 @@ export default function DebtsPage() {
     
     // Validate payment cannot exceed balance
     if (amount > balance) {
-      toast({ title: "Error", description: `Payment cannot exceed outstanding balance of ₦${balance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`, variant: "destructive" });
+      toast({ title: "Error", description: `Payment cannot exceed outstanding balance of ${currency.symbol}${balance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`, variant: "destructive" });
       return;
     }
 
