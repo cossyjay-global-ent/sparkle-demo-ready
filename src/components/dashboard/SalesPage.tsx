@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,9 +26,9 @@ import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 export default function SalesPage() {
-  const { settings } = useAuth();
   const { getProducts, addSale, getSales, deleteSale } = useData();
   const { dateRange, isDaily } = useDateFilter();
+  const { currency } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -66,7 +66,7 @@ export default function SalesPage() {
     setShowSuggestions(false);
   };
 
-  const currency = settings?.currencySymbol || '₦';
+  const currencySymbol = currency.symbol;
 
   useEffect(() => {
     loadData();
@@ -236,7 +236,7 @@ export default function SalesPage() {
                     <SelectContent>
                       {products.filter(p => p.stock > 0).map(product => (
                         <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {currency}{product.sellingPrice} (Stock: {product.stock})
+                          {product.name} - {currencySymbol}{product.sellingPrice} (Stock: {product.stock})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -276,7 +276,7 @@ export default function SalesPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label>Unit Price ({currency})</Label>
+                      <Label>Unit Price ({currencySymbol})</Label>
                       <Input
                         type="number"
                         min="0"
@@ -288,7 +288,7 @@ export default function SalesPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Cost Price ({currency})</Label>
+                      <Label>Cost Price ({currencySymbol})</Label>
                       <Input
                         type="number"
                         min="0"
@@ -321,11 +321,11 @@ export default function SalesPage() {
                 <div className="p-4 bg-muted rounded-lg space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Unit Price:</span>
-                    <span className="font-medium">{currency}{selectedProduct.sellingPrice}</span>
+                    <span className="font-medium">{currencySymbol}{selectedProduct.sellingPrice}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total:</span>
-                    <span className="font-bold text-lg">{currency}{selectedProduct.sellingPrice * parseInt(quantity || '0')}</span>
+                    <span className="font-bold text-lg">{currencySymbol}{selectedProduct.sellingPrice * parseInt(quantity || '0')}</span>
                   </div>
                 </div>
               )}
@@ -335,16 +335,16 @@ export default function SalesPage() {
                 <div className="p-4 bg-muted rounded-lg space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Unit Price:</span>
-                    <span className="font-medium">{currency}{parseFloat(manualUnitPrice) || 0}</span>
+                    <span className="font-medium">{currencySymbol}{parseFloat(manualUnitPrice) || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total:</span>
-                    <span className="font-bold text-lg">{currency}{(parseFloat(manualUnitPrice) || 0) * parseInt(quantity || '0')}</span>
+                    <span className="font-bold text-lg">{currencySymbol}{(parseFloat(manualUnitPrice) || 0) * parseInt(quantity || '0')}</span>
                   </div>
                   {manualCostPrice && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Profit:</span>
-                      <span className="font-medium text-green-600">{currency}{((parseFloat(manualUnitPrice) || 0) - (parseFloat(manualCostPrice) || 0)) * parseInt(quantity || '0')}</span>
+                      <span className="font-medium text-green-600">{currencySymbol}{((parseFloat(manualUnitPrice) || 0) - (parseFloat(manualCostPrice) || 0)) * parseInt(quantity || '0')}</span>
                     </div>
                   )}
                 </div>
@@ -367,7 +367,7 @@ export default function SalesPage() {
       {/* Grand Totals - Profit only visible in Profit section */}
       <div className="grand-total-card">
         <p className="text-primary-foreground/80 text-sm">Total Sales</p>
-        <p className="text-3xl font-bold">{currency}{totalSales.toLocaleString()}</p>
+        <p className="text-3xl font-bold">{currencySymbol}{totalSales.toLocaleString()}</p>
       </div>
 
       {/* Sales List - No profit column (profit only in Profit section) */}
@@ -396,7 +396,7 @@ export default function SalesPage() {
                   <tr key={sale.id} className="table-row-hover border-t border-border">
                     <td className="p-4 font-medium">{sale.productName}</td>
                     <td className="p-4">{sale.quantity}</td>
-                    <td className="p-4">{currency}{sale.totalAmount.toLocaleString()}</td>
+                    <td className="p-4">{currencySymbol}{sale.totalAmount.toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                     <td className="p-4">
                       <Button

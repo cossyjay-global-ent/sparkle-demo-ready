@@ -1,7 +1,7 @@
 import { useEffect, useState, forwardRef } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { 
   ShoppingCart, 
   Package, 
@@ -54,9 +54,9 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
 StatCard.displayName = 'StatCard';
 
 export default function DashboardHome() {
-  const { settings } = useAuth();
   const { getSales, getExpenses, getProducts, getCustomers, getDebts } = useData();
   const { dateRange, isDaily } = useDateFilter();
+  const { currency } = useCurrency();
   const [stats, setStats] = useState({
     totalSales: 0,
     totalExpenses: 0,
@@ -68,8 +68,6 @@ export default function DashboardHome() {
     filteredSales: 0,
     filteredExpenses: 0
   });
-
-  const currency = settings?.currencySymbol || '₦';
 
   useEffect(() => {
     const loadStats = async () => {
@@ -113,7 +111,7 @@ export default function DashboardHome() {
   }, [getSales, getExpenses, getProducts, getCustomers, getDebts, dateRange]);
 
   const formatCurrency = (amount: number) => {
-    return `${currency}${amount.toLocaleString()}`;
+    return `${currency.symbol}${amount.toLocaleString()}`;
   };
 
   const dateLabel = isDaily ? "Today's" : "Selected Period";

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,8 +35,8 @@ const EXPENSE_CATEGORIES = [
 ];
 
 export default function ExpensesPage() {
-  const { settings } = useAuth();
   const { getExpenses, addExpense, deleteExpense } = useData();
+  const { currency } = useCurrency();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -46,7 +46,7 @@ export default function ExpensesPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const currency = settings?.currencySymbol || '₦';
+  const currencySymbol = currency.symbol;
 
   useEffect(() => {
     loadExpenses();
@@ -169,7 +169,7 @@ export default function ExpensesPage() {
       {/* Grand Total */}
       <div className="grand-total-card">
         <p className="text-primary-foreground/80 text-sm">Total Expenses</p>
-        <p className="text-3xl font-bold">{currency}{totalExpenses.toLocaleString()}</p>
+        <p className="text-3xl font-bold">{currencySymbol}{totalExpenses.toLocaleString()}</p>
       </div>
 
       {/* Category Breakdown */}
@@ -178,7 +178,7 @@ export default function ExpensesPage() {
           {Object.entries(byCategory).map(([category, amount]) => (
             <Card key={category} className="stat-card">
               <p className="text-xs text-muted-foreground">{category}</p>
-              <p className="text-lg font-bold">{currency}{amount.toLocaleString()}</p>
+              <p className="text-lg font-bold">{currencySymbol}{amount.toLocaleString()}</p>
             </Card>
           ))}
         </div>
@@ -212,7 +212,7 @@ export default function ExpensesPage() {
                     <td className="p-4">
                       <span className="px-2 py-1 text-xs bg-muted rounded">{expense.category}</span>
                     </td>
-                    <td className="p-4 text-destructive font-medium">{currency}{expense.amount.toLocaleString()}</td>
+                    <td className="p-4 text-destructive font-medium">{currencySymbol}{expense.amount.toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(expense.date)}</td>
                     <td className="p-4">
                       <Button

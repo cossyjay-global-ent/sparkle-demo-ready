@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -16,8 +16,8 @@ import { Sale, Expense, Debt } from '@/lib/database';
 import { cn } from '@/lib/utils';
 
 export default function ReportsPage() {
-  const { settings } = useAuth();
   const { getSales, getExpenses, getDebts } = useData();
+  const { currency } = useCurrency();
   const [fromDate, setFromDate] = useState<Date | undefined>(new Date(new Date().setDate(1)));
   const [toDate, setToDate] = useState<Date | undefined>(new Date());
   const [sales, setSales] = useState<Sale[]>([]);
@@ -25,7 +25,7 @@ export default function ReportsPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
-  const currency = settings?.currencySymbol || '₦';
+  const currencySymbol = currency.symbol;
 
   useEffect(() => {
     loadData();
@@ -166,11 +166,11 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="grand-total-card">
           <p className="text-primary-foreground/80 text-sm">Total Sales</p>
-          <p className="text-2xl font-bold">{currency}{totalSales.toLocaleString()}</p>
+          <p className="text-2xl font-bold">{currencySymbol}{totalSales.toLocaleString()}</p>
         </div>
         <Card className="stat-card bg-destructive/10 border-destructive/20">
           <p className="text-sm text-destructive">Total Expenses</p>
-          <p className="text-xl font-bold text-destructive">{currency}{totalExpenses.toLocaleString()}</p>
+          <p className="text-xl font-bold text-destructive">{currencySymbol}{totalExpenses.toLocaleString()}</p>
         </Card>
       </div>
 
@@ -180,15 +180,15 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="stat-card">
             <p className="text-sm text-muted-foreground">Total Debts</p>
-            <p className="text-2xl font-bold">{currency}{totalDebts.toLocaleString()}</p>
+            <p className="text-2xl font-bold">{currencySymbol}{totalDebts.toLocaleString()}</p>
           </Card>
           <Card className="stat-card bg-success/10 border-success/20">
             <p className="text-sm text-success">Total Paid</p>
-            <p className="text-2xl font-bold text-success">{currency}{totalPaid.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-success">{currencySymbol}{totalPaid.toLocaleString()}</p>
           </Card>
           <Card className="stat-card bg-warning/10 border-warning/20">
             <p className="text-sm text-warning">Outstanding</p>
-            <p className="text-2xl font-bold text-warning">{currency}{totalOutstanding.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-warning">{currencySymbol}{totalOutstanding.toLocaleString()}</p>
           </Card>
         </div>
       </div>
@@ -230,8 +230,8 @@ export default function ReportsPage() {
                     return (
                       <tr key={period} className="table-row-hover border-t border-border">
                         <td className="p-4 font-medium">{period}</td>
-                        <td className="p-4">{currency}{data.sales.toLocaleString()}</td>
-                        <td className="p-4 text-destructive">{currency}{data.expenses.toLocaleString()}</td>
+                        <td className="p-4">{currencySymbol}{data.sales.toLocaleString()}</td>
+                        <td className="p-4 text-destructive">{currencySymbol}{data.expenses.toLocaleString()}</td>
                       </tr>
                     );
                   })

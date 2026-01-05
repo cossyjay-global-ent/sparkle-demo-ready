@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,8 +17,8 @@ import { Product, now } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
 
 export default function ProductsPage() {
-  const { settings } = useAuth();
   const { getProducts, addProduct, updateProduct, deleteProduct } = useData();
+  const { currency } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -31,7 +31,7 @@ export default function ProductsPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const currency = settings?.currencySymbol || '₦';
+  const currencySymbol = currency.symbol;
 
   useEffect(() => {
     loadProducts();
@@ -188,7 +188,7 @@ export default function ProductsPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Profit per unit:</span>
                     <span className="font-bold text-success">
-                      {currency}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toLocaleString()}
+                      {currencySymbol}{(parseFloat(formData.sellingPrice) - parseFloat(formData.costPrice)).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -217,7 +217,7 @@ export default function ProductsPage() {
         </Card>
         <Card className="stat-card">
           <p className="text-sm text-muted-foreground">Stock Value</p>
-          <p className="text-2xl font-bold">{currency}{totalValue.toLocaleString()}</p>
+          <p className="text-2xl font-bold">{currencySymbol}{totalValue.toLocaleString()}</p>
         </Card>
       </div>
 
@@ -250,11 +250,11 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Cost</p>
-                  <p className="font-medium">{currency}{product.costPrice.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{product.costPrice.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">{currency}{product.sellingPrice.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{product.sellingPrice.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
@@ -262,7 +262,7 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Profit</p>
-                  <p className="font-medium text-success">{currency}{(product.sellingPrice - product.costPrice).toLocaleString()}</p>
+                  <p className="font-medium text-success">{currencySymbol}{(product.sellingPrice - product.costPrice).toLocaleString()}</p>
                 </div>
               </div>
             </Card>
