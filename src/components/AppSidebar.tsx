@@ -123,9 +123,9 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
           variant="ghost"
           size="icon"
           onClick={() => setIsOpen(true)}
-          className="lg:hidden"
+          className="lg:hidden text-foreground"
         >
-          <Menu className="w-6 h-6" />
+          <Menu className="w-6 h-6 text-foreground" />
         </Button>
         <h1 className="font-semibold text-foreground">Offline POS</h1>
         <div className={`sync-indicator ${isOnline ? 'sync-online' : 'sync-offline'}`}>
