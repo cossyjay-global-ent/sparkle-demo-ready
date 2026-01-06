@@ -14,8 +14,6 @@ interface DateFilterContextType {
   canSelectDateRange: boolean;
 }
 
-const DATE_FILTER_STORAGE_KEY = 'offline-pos-date-filter';
-
 const DateFilterContext = createContext<DateFilterContextType | undefined>(undefined);
 
 function getStartOfDay(date: Date): Date {
@@ -30,6 +28,7 @@ function getEndOfDay(date: Date): Date {
   return d;
 }
 
+// NON-NEGOTIABLE: Always returns today's range - this is the GLOBAL DEFAULT
 function getTodayRange(): DateRange {
   const today = new Date();
   return {
@@ -48,127 +47,66 @@ function isSameDay(date1: Date, date2: Date): boolean {
 
 export function DateFilterProvider({ children }: { children: React.ReactNode }) {
   const { isAdmin } = useRBAC();
-  // ALWAYS initialize with today's range (Daily default)
+  
+  // NON-NEGOTIABLE: ALWAYS initialize with today's range (Daily default)
+  // This ensures all devices start with daily - synchronized by default
   const [dateRange, setDateRangeState] = useState<DateRange>(getTodayRange);
 
-  // Reset to daily on mount - ALWAYS enforce daily on app load/refresh
+  // NON-NEGOTIABLE: Reset to daily on EVERY mount/refresh
+  // This ensures synchronization across all devices - all start fresh with daily
   useEffect(() => {
-    const todayRange = getTodayRange();
-    setDateRangeState(todayRange);
-    try {
-      localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-        fromDate: todayRange.fromDate.toISOString(),
-        toDate: todayRange.toDate.toISOString()
-      }));
-    } catch (error) {
-      console.error('Error saving date filter on mount:', error);
-    }
+    setDateRangeState(getTodayRange());
   }, []);
 
-  // Listen for online/offline changes and reset to daily on reconnection
+  // NON-NEGOTIABLE: Reset to daily on reconnection
   useEffect(() => {
     const handleOnline = () => {
-      // Reset to daily on reconnection for consistency
-      const todayRange = getTodayRange();
-      setDateRangeState(todayRange);
-      try {
-        localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-          fromDate: todayRange.fromDate.toISOString(),
-          toDate: todayRange.toDate.toISOString()
-        }));
-      } catch (error) {
-        console.error('Error saving date filter on reconnection:', error);
-      }
+      setDateRangeState(getTodayRange());
     };
-
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // Listen for visibility change (PWA relaunch) and enforce daily
+  // NON-NEGOTIABLE: Reset to daily on visibility change (PWA relaunch, tab focus)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Check if it's a new day since last visit
-        const stored = localStorage.getItem(DATE_FILTER_STORAGE_KEY);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            const storedFrom = new Date(parsed.fromDate);
-            const today = new Date();
-            // If stored date is not today, reset to daily
-            if (!isSameDay(storedFrom, today)) {
-              const todayRange = getTodayRange();
-              setDateRangeState(todayRange);
-              localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-                fromDate: todayRange.fromDate.toISOString(),
-                toDate: todayRange.toDate.toISOString()
-              }));
-            }
-          } catch (error) {
-            // If error, reset to daily
-            const todayRange = getTodayRange();
-            setDateRangeState(todayRange);
-          }
-        }
+        // Always reset to daily when app becomes visible
+        setDateRangeState(getTodayRange());
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Enforce daily for staff users whenever isAdmin changes
+  // NON-NEGOTIABLE: Enforce daily for staff users
   useEffect(() => {
     if (!isAdmin) {
-      const todayRange = getTodayRange();
-      setDateRangeState(todayRange);
-      try {
-        localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-          fromDate: todayRange.fromDate.toISOString(),
-          toDate: todayRange.toDate.toISOString()
-        }));
-      } catch (error) {
-        console.error('Error enforcing daily for staff:', error);
-      }
+      setDateRangeState(getTodayRange());
     }
   }, [isAdmin]);
 
+  // NON-NEGOTIABLE: Reset to daily - used by components
   const resetToDaily = useCallback(() => {
-    const todayRange = getTodayRange();
-    setDateRangeState(todayRange);
-    try {
-      localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-        fromDate: todayRange.fromDate.toISOString(),
-        toDate: todayRange.toDate.toISOString()
-      }));
-    } catch (error) {
-      console.error('Error saving date filter:', error);
-    }
+    setDateRangeState(getTodayRange());
   }, []);
 
+  // Admin can temporarily change date range within current session only
+  // On any refresh/reload/device change, it resets to daily (synchronized behavior)
   const setDateRange = useCallback((range: DateRange) => {
-    // Staff users can only use daily
+    // Staff users can only use daily - NON-NEGOTIABLE
     if (!isAdmin) {
-      resetToDaily();
+      setDateRangeState(getTodayRange());
       return;
     }
 
-    const newRange = {
+    // Admin can change within session, but NO persistence
+    // This ensures all devices always start with daily (synchronized)
+    setDateRangeState({
       fromDate: getStartOfDay(range.fromDate),
       toDate: getEndOfDay(range.toDate)
-    };
-
-    setDateRangeState(newRange);
-    try {
-      localStorage.setItem(DATE_FILTER_STORAGE_KEY, JSON.stringify({
-        fromDate: newRange.fromDate.toISOString(),
-        toDate: newRange.toDate.toISOString()
-      }));
-    } catch (error) {
-      console.error('Error saving date filter:', error);
-    }
-  }, [isAdmin, resetToDaily]);
+    });
+  }, [isAdmin]);
 
   const today = new Date();
   const isDaily = isSameDay(dateRange.fromDate, today) && isSameDay(dateRange.toDate, today);
