@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRBAC } from './RBACContext';
+import { useAuth } from './AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DateRange {
   fromDate: Date;
@@ -47,16 +49,62 @@ function isSameDay(date1: Date, date2: Date): boolean {
 
 export function DateFilterProvider({ children }: { children: React.ReactNode }) {
   const { isAdmin } = useRBAC();
+  const { user } = useAuth();
   
   // NON-NEGOTIABLE: ALWAYS initialize with today's range (Daily default)
-  // This ensures all devices start with daily - synchronized by default
   const [dateRange, setDateRangeState] = useState<DateRange>(getTodayRange);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const isLocalChange = useRef(false);
 
   // NON-NEGOTIABLE: Reset to daily on EVERY mount/refresh
-  // This ensures synchronization across all devices - all start fresh with daily
   useEffect(() => {
     setDateRangeState(getTodayRange());
   }, []);
+
+  // Real-time sync for admin date range changes across devices
+  useEffect(() => {
+    if (!user?.id || !isAdmin) return;
+
+    const channelName = `date-filter-${user.id}`;
+    
+    // Clean up existing channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    // Create broadcast channel for real-time sync
+    const channel = supabase.channel(channelName);
+    
+    channel
+      .on('broadcast', { event: 'date-range-change' }, (payload) => {
+        console.log('[DateFilter] Received broadcast:', payload);
+        
+        // Only update if this is from another device (not our own change)
+        if (!isLocalChange.current && payload.payload) {
+          const { fromDate, toDate } = payload.payload;
+          if (fromDate && toDate) {
+            setDateRangeState({
+              fromDate: new Date(fromDate),
+              toDate: new Date(toDate)
+            });
+            console.log('[DateFilter] Synced date range from another device');
+          }
+        }
+        isLocalChange.current = false;
+      })
+      .subscribe((status) => {
+        console.log('[DateFilter] Channel status:', status);
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [user?.id, isAdmin]);
 
   // NON-NEGOTIABLE: Reset to daily on reconnection
   useEffect(() => {
@@ -71,7 +119,6 @@ export function DateFilterProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Always reset to daily when app becomes visible
         setDateRangeState(getTodayRange());
       }
     };
@@ -88,11 +135,24 @@ export function DateFilterProvider({ children }: { children: React.ReactNode }) 
 
   // NON-NEGOTIABLE: Reset to daily - used by components
   const resetToDaily = useCallback(() => {
-    setDateRangeState(getTodayRange());
-  }, []);
+    const todayRange = getTodayRange();
+    setDateRangeState(todayRange);
+    
+    // Broadcast reset to other devices
+    if (channelRef.current && isAdmin) {
+      isLocalChange.current = true;
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'date-range-change',
+        payload: {
+          fromDate: todayRange.fromDate.toISOString(),
+          toDate: todayRange.toDate.toISOString()
+        }
+      });
+    }
+  }, [isAdmin]);
 
-  // Admin can temporarily change date range within current session only
-  // On any refresh/reload/device change, it resets to daily (synchronized behavior)
+  // Admin can temporarily change date range - syncs across devices in real-time
   const setDateRange = useCallback((range: DateRange) => {
     // Staff users can only use daily - NON-NEGOTIABLE
     if (!isAdmin) {
@@ -100,12 +160,26 @@ export function DateFilterProvider({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // Admin can change within session, but NO persistence
-    // This ensures all devices always start with daily (synchronized)
-    setDateRangeState({
+    const newRange = {
       fromDate: getStartOfDay(range.fromDate),
       toDate: getEndOfDay(range.toDate)
-    });
+    };
+
+    setDateRangeState(newRange);
+
+    // Broadcast change to other devices for real-time sync
+    if (channelRef.current) {
+      isLocalChange.current = true;
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'date-range-change',
+        payload: {
+          fromDate: newRange.fromDate.toISOString(),
+          toDate: newRange.toDate.toISOString()
+        }
+      });
+      console.log('[DateFilter] Broadcasted date range change');
+    }
   }, [isAdmin]);
 
   const today = new Date();

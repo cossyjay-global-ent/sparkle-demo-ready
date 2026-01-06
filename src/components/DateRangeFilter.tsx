@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ArrowRight, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Badge } from '@/components/ui/badge';
 import {
   Popover,
   PopoverContent,
@@ -39,6 +40,17 @@ export function DateRangeFilter() {
   return (
     <div className="date-filter-container">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Daily Mode Badge - Always visible when in daily mode */}
+        {isDaily && (
+          <Badge 
+            variant="secondary" 
+            className="bg-primary/10 text-primary border-primary/20 font-medium gap-1 animate-in fade-in duration-300"
+          >
+            <Clock className="h-3 w-3" />
+            Daily Mode
+          </Badge>
+        )}
+
         <span className="text-sm font-medium text-muted-foreground">FROM</span>
         
         <Popover open={fromOpen} onOpenChange={setFromOpen}>
