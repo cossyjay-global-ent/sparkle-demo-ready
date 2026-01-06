@@ -149,13 +149,13 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         {/* Sidebar Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-primary" />
+            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4 text-sidebar-foreground" />
             </div>
             <div>
               <h2 className="font-bold text-sm text-sidebar-foreground">Offline POS</h2>
               {role && (
-                <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-white/20 text-sidebar-foreground border-0">
                   {role}
                 </Badge>
               )}
@@ -165,7 +165,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
             variant="ghost"
             size="icon"
             onClick={() => setIsOpen(false)}
-            className="lg:hidden"
+            className="lg:hidden text-sidebar-foreground hover:bg-white/20"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -173,7 +173,10 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 
         {/* Sync Status */}
         <div className="px-4 py-3 border-b border-sidebar-border flex-shrink-0">
-          <div className={`sync-indicator w-full justify-center ${isOnline ? 'sync-online' : 'sync-offline'}`}>
+          <div className={cn(
+            "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium w-full justify-center",
+            isOnline ? "bg-white/20 text-sidebar-foreground" : "bg-warning/20 text-warning"
+          )}>
             {isOnline ? (
               <>
                 <Wifi className="w-4 h-4" />
@@ -190,7 +193,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 
         {/* Main Navigation */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-thin">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider mb-2 px-3">
             Main Menu
           </p>
           {mainNavItems.filter(item => item.show).map((item) => (
@@ -209,9 +212,9 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
             </NavLink>
           ))}
 
-          <Separator className="my-4" />
+          <Separator className="my-4 bg-sidebar-border" />
 
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 px-3">
+          <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider mb-2 px-3">
             More
           </p>
           {secondaryNavItems.filter(item => item.show).map((item) => (
@@ -233,7 +236,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         <div className="p-4 border-t border-sidebar-border flex-shrink-0">
           <Button
             variant="outline"
-            className="w-full mb-2"
+            className="w-full mb-2 border-white/30 text-sidebar-foreground hover:bg-white/20 hover:text-sidebar-foreground bg-transparent"
             disabled={!isOnline}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
@@ -241,7 +244,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
           </Button>
           <Button
             variant="ghost"
-            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="w-full text-red-200 hover:text-white hover:bg-red-500/30"
             onClick={logout}
           >
             <LogOut className="w-4 h-4 mr-2" />
