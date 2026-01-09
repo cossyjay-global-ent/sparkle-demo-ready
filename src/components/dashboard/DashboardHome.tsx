@@ -66,13 +66,25 @@ export default function DashboardHome() {
     totalPaid: 0,
     totalOutstanding: 0,
     filteredSales: 0,
-    filteredExpenses: 0
+    filteredExpenses: 0,
+    yesterdaySales: 0,
+    yesterdayExpenses: 0
   });
 
   useEffect(() => {
     const loadStats = async () => {
       const fromTimestamp = dateRange.fromDate.getTime();
       const toTimestamp = dateRange.toDate.getTime();
+
+      // Calculate yesterday's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStart = yesterday.getTime();
+      const yesterdayEnd = new Date(yesterday);
+      yesterdayEnd.setHours(23, 59, 59, 999);
+      const yesterdayEndTimestamp = yesterdayEnd.getTime();
 
       const [sales, expenses, products, customers, debts] = await Promise.all([
         getSales(),
@@ -87,12 +99,19 @@ export default function DashboardHome() {
       const totalDebts = debts.reduce((sum, d) => sum + d.totalAmount, 0);
       const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
       
-      // Filter by date range
+      // Filter by date range (current selection)
       const filteredSalesData = sales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
       const filteredSales = filteredSalesData.reduce((sum, s) => sum + s.totalAmount, 0);
 
       const filteredExpensesData = expenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
       const filteredExpenses = filteredExpensesData.reduce((sum, e) => sum + e.amount, 0);
+
+      // Calculate yesterday's totals for trend comparison
+      const yesterdaySalesData = sales.filter(s => s.date >= yesterdayStart && s.date <= yesterdayEndTimestamp);
+      const yesterdaySales = yesterdaySalesData.reduce((sum, s) => sum + s.totalAmount, 0);
+
+      const yesterdayExpensesData = expenses.filter(e => e.date >= yesterdayStart && e.date <= yesterdayEndTimestamp);
+      const yesterdayExpenses = yesterdayExpensesData.reduce((sum, e) => sum + e.amount, 0);
 
       setStats({
         totalSales,
@@ -103,7 +122,9 @@ export default function DashboardHome() {
         totalPaid,
         totalOutstanding: totalDebts - totalPaid,
         filteredSales,
-        filteredExpenses
+        filteredExpenses,
+        yesterdaySales,
+        yesterdayExpenses
       });
     };
 
@@ -115,6 +136,23 @@ export default function DashboardHome() {
   };
 
   const dateLabel = isDaily ? "Today's" : "Selected Period";
+
+  // Calculate percentage change compared to yesterday
+  const calculateTrend = (current: number, previous: number): { trend: 'up' | 'down' | undefined; value: string | undefined } => {
+    if (previous === 0) {
+      if (current > 0) return { trend: 'up', value: '+100% vs yesterday' };
+      return { trend: undefined, value: undefined };
+    }
+    const change = ((current - previous) / previous) * 100;
+    if (change === 0) return { trend: undefined, value: undefined };
+    return {
+      trend: change > 0 ? 'up' : 'down',
+      value: `${change > 0 ? '+' : ''}${change.toFixed(1)}% vs yesterday`
+    };
+  };
+
+  const salesTrend = isDaily ? calculateTrend(stats.filteredSales, stats.yesterdaySales) : { trend: undefined, value: undefined };
+  const expensesTrend = isDaily ? calculateTrend(stats.filteredExpenses, stats.yesterdayExpenses) : { trend: undefined, value: undefined };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -138,17 +176,40 @@ export default function DashboardHome() {
           title={`${dateLabel} Sales`}
           value={formatCurrency(stats.filteredSales)}
           icon={<ShoppingCart className="w-5 h-5 text-primary" />}
+          trend={salesTrend.trend}
+          trendValue={salesTrend.value}
         />
         <StatCard
           title={`${dateLabel} Expenses`}
           value={formatCurrency(stats.filteredExpenses)}
           icon={<Receipt className="w-5 h-5 text-primary" />}
+          trend={expensesTrend.trend}
+          trendValue={expensesTrend.value}
         />
         <StatCard
           title="Products"
           value={stats.totalProducts.toString()}
           icon={<Package className="w-5 h-5 text-primary" />}
         />
+      </div>
+
+      {/* All-Time Summary Section */}
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-4">All-Time Summary</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatCard
+            title="Total All-Time Sales"
+            value={formatCurrency(stats.totalSales)}
+            subtitle="Cumulative since start"
+            icon={<ShoppingCart className="w-5 h-5 text-success" />}
+          />
+          <StatCard
+            title="Total All-Time Expenses"
+            value={formatCurrency(stats.totalExpenses)}
+            subtitle="Cumulative since start"
+            icon={<Receipt className="w-5 h-5 text-warning" />}
+          />
+        </div>
       </div>
 
       {/* Debt Summary */}
