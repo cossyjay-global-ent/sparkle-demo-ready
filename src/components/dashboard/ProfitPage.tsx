@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useDateFilter } from '@/contexts/DateFilterContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,21 +14,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Lock, TrendingUp, Eye, EyeOff } from 'lucide-react';
-import { Sale } from '@/lib/database';
+import { Sale, Expense } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 export default function ProfitPage() {
   const { hasProfitPassword, setProfitPassword, verifyProfitPassword } = useAuth();
   const { getSales, getExpenses } = useData();
   const { currency } = useCurrency();
+  const { dateRange, isDaily } = useDateFilter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [showVerifyPassword, setShowVerifyPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [allSales, setAllSales] = useState<Sale[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const currencySymbol = currency.symbol;
@@ -45,8 +48,8 @@ export default function ProfitPage() {
       getSales(),
       getExpenses()
     ]);
-    setSales(salesData.sort((a, b) => b.date - a.date));
-    setTotalExpenses(expensesData.reduce((sum, e) => sum + e.amount, 0));
+    setAllSales(salesData.sort((a, b) => b.date - a.date));
+    setAllExpenses(expensesData);
   };
 
   const handleSetPassword = async () => {
@@ -83,19 +86,31 @@ export default function ProfitPage() {
     setPassword('');
   };
 
-  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
+  // Filter data by selected date range
+  const fromTimestamp = dateRange.fromDate.getTime();
+  const toTimestamp = dateRange.toDate.getTime();
+
+  const filteredSales = allSales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
+  const filteredExpenses = allExpenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
+
+  const totalProfit = filteredSales.reduce((sum, s) => sum + s.profit, 0);
+  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const netProfit = totalProfit - totalExpenses;
 
-  // Calculate by period
+  // Calculate by period (for quick reference cards)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStart = today.getTime();
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+  const todayEndTimestamp = todayEnd.getTime();
+  
   const weekStart = todayStart - (today.getDay() * 86400000);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
 
-  const todayProfit = sales.filter(s => s.date >= todayStart).reduce((sum, s) => sum + s.profit, 0);
-  const weekProfit = sales.filter(s => s.date >= weekStart).reduce((sum, s) => sum + s.profit, 0);
-  const monthProfit = sales.filter(s => s.date >= monthStart).reduce((sum, s) => sum + s.profit, 0);
+  const todayProfit = allSales.filter(s => s.date >= todayStart && s.date <= todayEndTimestamp).reduce((sum, s) => sum + s.profit, 0);
+  const weekProfit = allSales.filter(s => s.date >= weekStart).reduce((sum, s) => sum + s.profit, 0);
+  const monthProfit = allSales.filter(s => s.date >= monthStart).reduce((sum, s) => sum + s.profit, 0);
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('en-NG', {
@@ -104,6 +119,8 @@ export default function ProfitPage() {
       year: 'numeric'
     });
   };
+
+  const dateLabel = isDaily ? "Today's" : "Selected Period";
 
   if (!isAuthenticated) {
     return (
@@ -214,38 +231,41 @@ export default function ProfitPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-primary" />
-          Profit Records
-        </h1>
-        <p className="text-muted-foreground">Track your business profits</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-primary" />
+            Profit Records
+          </h1>
+          <p className="text-muted-foreground">Track your business profits</p>
+        </div>
+        <DateRangeFilter />
       </div>
 
-      {/* Grand Totals */}
+      {/* Filtered Period Totals */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="grand-total-card">
-          <p className="text-primary-foreground/80 text-sm">Total Profit</p>
+          <p className="text-primary-foreground/80 text-sm">{dateLabel} Profit</p>
           <p className="text-3xl font-bold">{currencySymbol}{totalProfit.toLocaleString()}</p>
         </div>
         <Card className="stat-card bg-destructive/10 border-destructive/20">
-          <p className="text-sm text-destructive">Total Expenses</p>
+          <p className="text-sm text-destructive">{dateLabel} Expenses</p>
           <p className="text-2xl font-bold text-destructive">{currencySymbol}{totalExpenses.toLocaleString()}</p>
         </Card>
         <Card className={`stat-card ${netProfit >= 0 ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/20'}`}>
-          <p className={`text-sm ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>Net Profit</p>
+          <p className={`text-sm ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>{dateLabel} Net</p>
           <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
             {currencySymbol}{netProfit.toLocaleString()}
           </p>
         </Card>
       </div>
 
-      {/* Period Breakdown */}
+      {/* Quick Period Reference */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Profit by Period</h2>
+        <h2 className="text-lg font-semibold mb-4">Quick Reference</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card className="stat-card">
-            <p className="text-sm text-muted-foreground">Today</p>
+            <p className="text-sm text-muted-foreground">Today's Profit</p>
             <p className="text-2xl font-bold text-success">{currencySymbol}{todayProfit.toLocaleString()}</p>
           </Card>
           <Card className="stat-card">
@@ -259,10 +279,13 @@ export default function ProfitPage() {
         </div>
       </div>
 
-      {/* Profit History */}
+      {/* Profit History - Filtered by Date Range */}
       <Card className="overflow-hidden">
         <div className="p-4 border-b border-border">
-          <h3 className="font-semibold">Profit History</h3>
+          <h3 className="font-semibold">{dateLabel} Profit History</h3>
+          <p className="text-sm text-muted-foreground">
+            {filteredSales.length} record{filteredSales.length !== 1 ? 's' : ''} found
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -277,15 +300,15 @@ export default function ProfitPage() {
               </tr>
             </thead>
             <tbody>
-              {sales.length === 0 ? (
+              {filteredSales.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-muted-foreground">
                     <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No profit records yet</p>
+                    <p>No profit records for {isDaily ? 'today' : 'selected period'}</p>
                   </td>
                 </tr>
               ) : (
-                sales.map(sale => (
+                filteredSales.map(sale => (
                   <tr key={sale.id} className="table-row-hover border-t border-border">
                     <td className="p-4 font-medium">{sale.productName}</td>
                     <td className="p-4">{sale.quantity}</td>
