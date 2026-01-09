@@ -132,16 +132,16 @@ export default function DashboardHome() {
         <p className="text-3xl font-bold">{formatCurrency(stats.filteredSales)}</p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Always shows daily/filtered values */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
-          title="Total Sales"
-          value={formatCurrency(stats.totalSales)}
+          title={`${dateLabel} Sales`}
+          value={formatCurrency(stats.filteredSales)}
           icon={<ShoppingCart className="w-5 h-5 text-primary" />}
         />
         <StatCard
-          title="Total Expenses"
-          value={formatCurrency(stats.totalExpenses)}
+          title={`${dateLabel} Expenses`}
+          value={formatCurrency(stats.filteredExpenses)}
           icon={<Receipt className="w-5 h-5 text-primary" />}
         />
         <StatCard
