@@ -1,4 +1,22 @@
-import { useState, useEffect } from 'react';
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 🔒 PROFIT PAGE - PRODUCTION LOCKED
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
+ * 
+ * 1. DAILY is the DEFAULT - always shows today's profit on load
+ * 2. Uses global DateFilterContext for consistent date filtering
+ * 3. FROM → TO calendar filters work for historical profit viewing
+ * 4. Admin date changes sync in real-time across all devices
+ * 5. Offline → Online always reverts to Daily safely
+ * 6. PWA relaunch always starts fresh with Daily profit view
+ * 
+ * This file is PRODUCTION-LOCKED for Play Store stability.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -22,7 +40,7 @@ export default function ProfitPage() {
   const { hasProfitPassword, setProfitPassword, verifyProfitPassword } = useAuth();
   const { getSales, getExpenses } = useData();
   const { currency } = useCurrency();
-  const { dateRange, isDaily } = useDateFilter();
+  const { dateRange, isDaily, resetToDaily, syncStatus } = useDateFilter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [showVerifyPassword, setShowVerifyPassword] = useState(false);
@@ -32,8 +50,62 @@ export default function ProfitPage() {
   const [allSales, setAllSales] = useState<Sale[]>([]);
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 🔒 NON-NEGOTIABLE: Track mount state for Daily enforcement
+  const mountedRef = useRef(true);
+  const hasInitialized = useRef(false);
 
   const currencySymbol = currency.symbol;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 DAILY DEFAULT ENFORCEMENT - NON-NEGOTIABLE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // 🔒 Reset to Daily on mount - LOCKED
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    // Force Daily on initial load
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      resetToDaily();
+      console.log('[ProfitPage] ✓ Initialized with Daily default');
+    }
+    
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [resetToDaily]);
+
+  // 🔒 Reset to Daily on reconnection - LOCKED
+  useEffect(() => {
+    const handleOnline = () => {
+      if (mountedRef.current) {
+        console.log('[ProfitPage] Online - resetting to Daily');
+        resetToDaily();
+      }
+    };
+    
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [resetToDaily]);
+
+  // 🔒 Reset to Daily on visibility change (PWA relaunch, tab focus) - LOCKED
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        console.log('[ProfitPage] Visibility restored - resetting to Daily');
+        resetToDaily();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [resetToDaily]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AUTHENTICATION & DATA LOADING
+  // ═══════════════════════════════════════════════════════════════════════════
 
   useEffect(() => {
     if (!hasProfitPassword()) {
@@ -43,14 +115,16 @@ export default function ProfitPage() {
     }
   }, [hasProfitPassword]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [salesData, expensesData] = await Promise.all([
       getSales(),
       getExpenses()
     ]);
-    setAllSales(salesData.sort((a, b) => b.date - a.date));
-    setAllExpenses(expensesData);
-  };
+    if (mountedRef.current) {
+      setAllSales(salesData.sort((a, b) => b.date - a.date));
+      setAllExpenses(expensesData);
+    }
+  }, [getSales, getExpenses]);
 
   const handleSetPassword = async () => {
     if (password.length < 4) {
@@ -86,18 +160,23 @@ export default function ProfitPage() {
     setPassword('');
   };
 
-  // Filter data by selected date range
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 DATA FILTERING - ALIGNED WITH GLOBAL DATE SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Filter data by selected date range (from global DateFilterContext)
   const fromTimestamp = dateRange.fromDate.getTime();
   const toTimestamp = dateRange.toDate.getTime();
 
   const filteredSales = allSales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
   const filteredExpenses = allExpenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
 
+  // 🔒 NON-NEGOTIABLE: Profit = Sales - Expenses
   const totalProfit = filteredSales.reduce((sum, s) => sum + s.profit, 0);
   const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const netProfit = totalProfit - totalExpenses;
 
-  // Calculate by period (for quick reference cards)
+  // Calculate by period (for quick reference cards - ALWAYS based on actual dates)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStart = today.getTime();
@@ -108,6 +187,7 @@ export default function ProfitPage() {
   const weekStart = todayStart - (today.getDay() * 86400000);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
 
+  // Quick reference values (always show today/week/month regardless of filter)
   const todayProfit = allSales.filter(s => s.date >= todayStart && s.date <= todayEndTimestamp).reduce((sum, s) => sum + s.profit, 0);
   const weekProfit = allSales.filter(s => s.date >= weekStart).reduce((sum, s) => sum + s.profit, 0);
   const monthProfit = allSales.filter(s => s.date >= monthStart).reduce((sum, s) => sum + s.profit, 0);
@@ -120,6 +200,7 @@ export default function ProfitPage() {
     });
   };
 
+  // 🔒 Label reflects Daily default or selected period
   const dateLabel = isDaily ? "Today's" : "Selected Period";
 
   if (!isAuthenticated) {
