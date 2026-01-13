@@ -16,7 +16,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -25,22 +25,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Lock, TrendingUp, Eye, EyeOff } from 'lucide-react';
+import { Lock, TrendingUp, Eye, EyeOff, Calendar, RefreshCw } from 'lucide-react';
 import { Sale, Expense } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 export default function ProfitPage() {
-  const { hasProfitPassword, setProfitPassword, verifyProfitPassword } = useAuth();
+  const { hasProfitPassword, setProfitPassword, verifyProfitPassword, user } = useAuth();
   const { getSales, getExpenses } = useData();
   const { currency } = useCurrency();
-  const { dateRange, isDaily, resetToDaily, syncStatus } = useDateFilter();
+  const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [showVerifyPassword, setShowVerifyPassword] = useState(false);
@@ -54,22 +55,23 @@ export default function ProfitPage() {
   // 🔒 NON-NEGOTIABLE: Track mount state for Daily enforcement
   const mountedRef = useRef(true);
   const hasInitialized = useRef(false);
+  const lastUserId = useRef<string | null>(null);
 
   const currencySymbol = currency.symbol;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🔒 DAILY DEFAULT ENFORCEMENT - NON-NEGOTIABLE
+  // 🔒 DAILY DEFAULT ENFORCEMENT - NON-NEGOTIABLE (PRODUCTION LOCKED)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // 🔒 Reset to Daily on mount - LOCKED
+  // 🔒 Reset to Daily on mount - LOCKED & IMMUTABLE
   useEffect(() => {
     mountedRef.current = true;
     
-    // Force Daily on initial load
+    // Force Daily on initial load - UNCONDITIONAL
     if (!hasInitialized.current) {
       hasInitialized.current = true;
       resetToDaily();
-      console.log('[ProfitPage] ✓ Initialized with Daily default');
+      console.log('[ProfitPage] ✓ LOCKED: Initialized with Daily default');
     }
     
     return () => {
@@ -77,11 +79,30 @@ export default function ProfitPage() {
     };
   }, [resetToDaily]);
 
+  // 🔒 Reset to Daily on user change (login/logout) - LOCKED
+  useEffect(() => {
+    const currentUserId = user?.id || null;
+    
+    // Detect user change (login, logout, or user switch)
+    if (lastUserId.current !== currentUserId) {
+      const wasLoggedIn = lastUserId.current !== null;
+      const isNowLoggedIn = currentUserId !== null;
+      
+      lastUserId.current = currentUserId;
+      
+      // Reset to Daily on any authentication state change
+      if (mountedRef.current && (wasLoggedIn || isNowLoggedIn)) {
+        console.log('[ProfitPage] Auth state changed - resetting to Daily');
+        resetToDaily();
+      }
+    }
+  }, [user?.id, resetToDaily]);
+
   // 🔒 Reset to Daily on reconnection - LOCKED
   useEffect(() => {
     const handleOnline = () => {
       if (mountedRef.current) {
-        console.log('[ProfitPage] Online - resetting to Daily');
+        console.log('[ProfitPage] ✓ Online - resetting to Daily');
         resetToDaily();
       }
     };
@@ -94,7 +115,7 @@ export default function ProfitPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        console.log('[ProfitPage] Visibility restored - resetting to Daily');
+        console.log('[ProfitPage] ✓ Visibility restored - resetting to Daily');
         resetToDaily();
       }
     };
@@ -102,6 +123,22 @@ export default function ProfitPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [resetToDaily]);
+
+  // 🔒 Reset to Daily on page focus (window focus event) - LOCKED
+  useEffect(() => {
+    const handleFocus = () => {
+      if (mountedRef.current) {
+        console.log('[ProfitPage] ✓ Window focused - ensuring Daily default');
+        // Only reset if we're somehow drifted from daily on initial focus
+        if (!isDaily && !canSelectDateRange) {
+          resetToDaily();
+        }
+      }
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [resetToDaily, isDaily, canSelectDateRange]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // AUTHENTICATION & DATA LOADING
@@ -200,8 +237,20 @@ export default function ProfitPage() {
     });
   };
 
-  // 🔒 Label reflects Daily default or selected period
-  const dateLabel = isDaily ? "Today's" : "Selected Period";
+  // 🔒 Label reflects Daily default or selected period - LOCKED
+  const dateLabel = useMemo(() => {
+    return isDaily ? "Today's" : "Selected Period";
+  }, [isDaily]);
+
+  // 🔒 Sync status badge color - LOCKED
+  const syncStatusColor = useMemo(() => {
+    switch (syncStatus) {
+      case 'connected': return 'bg-success text-success-foreground';
+      case 'connecting': return 'bg-warning text-warning-foreground';
+      case 'disconnected': return 'bg-muted text-muted-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  }, [syncStatus]);
 
   if (!isAuthenticated) {
     return (
@@ -318,9 +367,30 @@ export default function ProfitPage() {
             <TrendingUp className="w-6 h-6 text-primary" />
             Profit Records
           </h1>
-          <p className="text-muted-foreground">Track your business profits</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground">Track your business profits</p>
+            {isDaily && (
+              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
+                <Calendar className="w-3 h-3 mr-1" />
+                Daily Mode
+              </Badge>
+            )}
+          </div>
         </div>
-        <DateRangeFilter />
+        <div className="flex items-center gap-2">
+          {!isDaily && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetToDaily}
+              className="text-xs"
+            >
+              <RefreshCw className="w-3 h-3 mr-1" />
+              Reset to Today
+            </Button>
+          )}
+          <DateRangeFilter />
+        </div>
       </div>
 
       {/* Filtered Period Totals */}
