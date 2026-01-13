@@ -52,10 +52,15 @@ export default function ProfitPage() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 🔒 NON-NEGOTIABLE: Track mount state for Daily enforcement
+  // 🔒 NON-NEGOTIABLE: Track mount state for Daily enforcement - RACE-CONDITION SAFE
   const mountedRef = useRef(true);
   const hasInitialized = useRef(false);
   const lastUserId = useRef<string | null>(null);
+  const initializationLock = useRef(false);
+  const lastResetTime = useRef<number>(0);
+  
+  // 🔒 RESET DEBOUNCE: Prevents multiple rapid resets causing race conditions
+  const RESET_DEBOUNCE_MS = 150;
 
   const currencySymbol = currency.symbol;
 
@@ -63,23 +68,43 @@ export default function ProfitPage() {
   // 🔒 DAILY DEFAULT ENFORCEMENT - NON-NEGOTIABLE (PRODUCTION LOCKED)
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // 🔒 SAFE RESET FUNCTION - Debounced to prevent race conditions
+  const safeResetToDaily = useCallback(() => {
+    const now = Date.now();
+    if (now - lastResetTime.current < RESET_DEBOUNCE_MS) {
+      return; // Skip if too soon after last reset
+    }
+    if (!mountedRef.current) return;
+    
+    lastResetTime.current = now;
+    resetToDaily();
+  }, [resetToDaily]);
+
   // 🔒 Reset to Daily on mount - LOCKED & IMMUTABLE
   useEffect(() => {
     mountedRef.current = true;
     
-    // Force Daily on initial load - UNCONDITIONAL
-    if (!hasInitialized.current) {
+    // Force Daily on initial load - UNCONDITIONAL with lock
+    if (!hasInitialized.current && !initializationLock.current) {
+      initializationLock.current = true;
       hasInitialized.current = true;
-      resetToDaily();
-      console.log('[ProfitPage] ✓ LOCKED: Initialized with Daily default');
+      
+      // Use microtask to ensure context is ready
+      queueMicrotask(() => {
+        if (mountedRef.current) {
+          safeResetToDaily();
+          console.log('[ProfitPage] ✓ LOCKED: Initialized with Daily default');
+        }
+        initializationLock.current = false;
+      });
     }
     
     return () => {
       mountedRef.current = false;
     };
-  }, [resetToDaily]);
+  }, [safeResetToDaily]);
 
-  // 🔒 Reset to Daily on user change (login/logout) - LOCKED
+  // 🔒 Reset to Daily on user change (login/logout) - LOCKED & RACE-SAFE
   useEffect(() => {
     const currentUserId = user?.id || null;
     
@@ -90,55 +115,55 @@ export default function ProfitPage() {
       
       lastUserId.current = currentUserId;
       
-      // Reset to Daily on any authentication state change
-      if (mountedRef.current && (wasLoggedIn || isNowLoggedIn)) {
+      // Reset to Daily on any authentication state change - debounced
+      if (mountedRef.current && (wasLoggedIn || isNowLoggedIn) && hasInitialized.current) {
         console.log('[ProfitPage] Auth state changed - resetting to Daily');
-        resetToDaily();
+        safeResetToDaily();
       }
     }
-  }, [user?.id, resetToDaily]);
+  }, [user?.id, safeResetToDaily]);
 
-  // 🔒 Reset to Daily on reconnection - LOCKED
+  // 🔒 Reset to Daily on reconnection - LOCKED & RACE-SAFE
   useEffect(() => {
     const handleOnline = () => {
-      if (mountedRef.current) {
+      if (mountedRef.current && hasInitialized.current) {
         console.log('[ProfitPage] ✓ Online - resetting to Daily');
-        resetToDaily();
+        safeResetToDaily();
       }
     };
     
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [resetToDaily]);
+  }, [safeResetToDaily]);
 
-  // 🔒 Reset to Daily on visibility change (PWA relaunch, tab focus) - LOCKED
+  // 🔒 Reset to Daily on visibility change (PWA relaunch, tab focus) - LOCKED & RACE-SAFE
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && mountedRef.current) {
+      if (document.visibilityState === 'visible' && mountedRef.current && hasInitialized.current) {
         console.log('[ProfitPage] ✓ Visibility restored - resetting to Daily');
-        resetToDaily();
+        safeResetToDaily();
       }
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [resetToDaily]);
+  }, [safeResetToDaily]);
 
-  // 🔒 Reset to Daily on page focus (window focus event) - LOCKED
+  // 🔒 Reset to Daily on page focus (window focus event) - LOCKED & RACE-SAFE
   useEffect(() => {
     const handleFocus = () => {
-      if (mountedRef.current) {
-        console.log('[ProfitPage] ✓ Window focused - ensuring Daily default');
-        // Only reset if we're somehow drifted from daily on initial focus
+      if (mountedRef.current && hasInitialized.current) {
+        // Only reset if we're somehow drifted from daily AND user can't select ranges
         if (!isDaily && !canSelectDateRange) {
-          resetToDaily();
+          console.log('[ProfitPage] ✓ Window focused - correcting drift to Daily');
+          safeResetToDaily();
         }
       }
     };
     
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [resetToDaily, isDaily, canSelectDateRange]);
+  }, [safeResetToDaily, isDaily, canSelectDateRange]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // AUTHENTICATION & DATA LOADING
