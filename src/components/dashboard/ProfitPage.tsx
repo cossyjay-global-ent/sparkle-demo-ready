@@ -52,118 +52,165 @@ export default function ProfitPage() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 🔒 NON-NEGOTIABLE: Track mount state for Daily enforcement - RACE-CONDITION SAFE
-  const mountedRef = useRef(true);
-  const hasInitialized = useRef(false);
-  const lastUserId = useRef<string | null>(null);
-  const initializationLock = useRef(false);
-  const lastResetTime = useRef<number>(0);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 RACE-SAFE STATE MACHINE - SINGLE SOURCE OF TRUTH (NON-REVERSIBLE)
+  // ═══════════════════════════════════════════════════════════════════════════
   
-  // 🔒 RESET DEBOUNCE: Prevents multiple rapid resets causing race conditions
-  const RESET_DEBOUNCE_MS = 150;
+  // Atomic state flags - prevents double initialization & async drift
+  const stateRef = useRef({
+    mounted: true,
+    initialized: false,
+    locked: false,
+    lastResetTimestamp: 0,
+    lastUserId: null as string | null,
+    resetCount: 0 // Debug counter
+  });
+
+  // 🔒 DEBOUNCE CONSTANT: Prevents multiple rapid resets causing race conditions
+  const RESET_DEBOUNCE_MS = 200;
+  const INIT_LOCK_TIMEOUT_MS = 500;
 
   const currencySymbol = currency.symbol;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🔒 DAILY DEFAULT ENFORCEMENT - NON-NEGOTIABLE (PRODUCTION LOCKED)
+  // 🔒 ATOMIC SAFE RESET - DEBOUNCED & RACE-CONDITION PROOF
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // 🔒 SAFE RESET FUNCTION - Debounced to prevent race conditions
-  const safeResetToDaily = useCallback(() => {
+  const atomicResetToDaily = useCallback((source: string) => {
+    const state = stateRef.current;
     const now = Date.now();
-    if (now - lastResetTime.current < RESET_DEBOUNCE_MS) {
-      return; // Skip if too soon after last reset
-    }
-    if (!mountedRef.current) return;
     
-    lastResetTime.current = now;
+    // Guard 1: Component must be mounted
+    if (!state.mounted) {
+      console.log(`[ProfitPage] ✗ Reset blocked (unmounted) - source: ${source}`);
+      return false;
+    }
+    
+    // Guard 2: Debounce rapid calls
+    if (now - state.lastResetTimestamp < RESET_DEBOUNCE_MS) {
+      console.log(`[ProfitPage] ✗ Reset debounced - source: ${source}`);
+      return false;
+    }
+    
+    // Guard 3: Prevent concurrent resets
+    if (state.locked) {
+      console.log(`[ProfitPage] ✗ Reset locked - source: ${source}`);
+      return false;
+    }
+    
+    // Acquire lock
+    state.locked = true;
+    state.lastResetTimestamp = now;
+    state.resetCount++;
+    
+    // Execute reset
     resetToDaily();
+    console.log(`[ProfitPage] ✓ LOCKED: Daily reset #${state.resetCount} - source: ${source}`);
+    
+    // Release lock after debounce period
+    setTimeout(() => {
+      if (stateRef.current.mounted) {
+        stateRef.current.locked = false;
+      }
+    }, RESET_DEBOUNCE_MS);
+    
+    return true;
   }, [resetToDaily]);
 
-  // 🔒 Reset to Daily on mount - LOCKED & IMMUTABLE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 INITIALIZATION - SINGLE ATOMIC OPERATION (NON-REVERSIBLE)
+  // ═══════════════════════════════════════════════════════════════════════════
+
   useEffect(() => {
-    mountedRef.current = true;
+    const state = stateRef.current;
+    state.mounted = true;
     
-    // Force Daily on initial load - UNCONDITIONAL with lock
-    if (!hasInitialized.current && !initializationLock.current) {
-      initializationLock.current = true;
-      hasInitialized.current = true;
+    // One-time initialization - ATOMIC
+    if (!state.initialized && !state.locked) {
+      state.initialized = true;
+      state.locked = true;
       
-      // Use microtask to ensure context is ready
-      queueMicrotask(() => {
-        if (mountedRef.current) {
-          safeResetToDaily();
-          console.log('[ProfitPage] ✓ LOCKED: Initialized with Daily default');
+      // Synchronous reset on mount - no microtask needed
+      resetToDaily();
+      console.log('[ProfitPage] ✓ PERMANENT LOCK: Initialized with Daily default');
+      
+      // Release lock after timeout
+      setTimeout(() => {
+        if (stateRef.current.mounted) {
+          stateRef.current.locked = false;
         }
-        initializationLock.current = false;
-      });
+      }, INIT_LOCK_TIMEOUT_MS);
     }
     
     return () => {
-      mountedRef.current = false;
+      state.mounted = false;
     };
-  }, [safeResetToDaily]);
+  }, []); // Empty deps - runs exactly once
 
-  // 🔒 Reset to Daily on user change (login/logout) - LOCKED & RACE-SAFE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 AUTH STATE CHANGE HANDLER - RACE-SAFE
+  // ═══════════════════════════════════════════════════════════════════════════
+
   useEffect(() => {
+    const state = stateRef.current;
     const currentUserId = user?.id || null;
     
-    // Detect user change (login, logout, or user switch)
-    if (lastUserId.current !== currentUserId) {
-      const wasLoggedIn = lastUserId.current !== null;
+    // Skip if not initialized yet
+    if (!state.initialized) return;
+    
+    // Detect actual user change
+    if (state.lastUserId !== currentUserId) {
+      const wasLoggedIn = state.lastUserId !== null;
       const isNowLoggedIn = currentUserId !== null;
       
-      lastUserId.current = currentUserId;
+      state.lastUserId = currentUserId;
       
-      // Reset to Daily on any authentication state change - debounced
-      if (mountedRef.current && (wasLoggedIn || isNowLoggedIn) && hasInitialized.current) {
-        console.log('[ProfitPage] Auth state changed - resetting to Daily');
-        safeResetToDaily();
+      // Reset to Daily on any auth state change
+      if (wasLoggedIn || isNowLoggedIn) {
+        atomicResetToDaily('auth-change');
       }
     }
-  }, [user?.id, safeResetToDaily]);
+  }, [user?.id, atomicResetToDaily]);
 
-  // 🔒 Reset to Daily on reconnection - LOCKED & RACE-SAFE
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 CONNECTIVITY & VISIBILITY HANDLERS - CONSOLIDATED & RACE-SAFE
+  // ═══════════════════════════════════════════════════════════════════════════
+
   useEffect(() => {
+    const state = stateRef.current;
+    
     const handleOnline = () => {
-      if (mountedRef.current && hasInitialized.current) {
-        console.log('[ProfitPage] ✓ Online - resetting to Daily');
-        safeResetToDaily();
+      if (state.mounted && state.initialized) {
+        atomicResetToDaily('online');
       }
     };
     
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [safeResetToDaily]);
-
-  // 🔒 Reset to Daily on visibility change (PWA relaunch, tab focus) - LOCKED & RACE-SAFE
-  useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && mountedRef.current && hasInitialized.current) {
-        console.log('[ProfitPage] ✓ Visibility restored - resetting to Daily');
-        safeResetToDaily();
+      if (document.visibilityState === 'visible' && state.mounted && state.initialized) {
+        atomicResetToDaily('visibility');
       }
     };
     
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [safeResetToDaily]);
-
-  // 🔒 Reset to Daily on page focus (window focus event) - LOCKED & RACE-SAFE
-  useEffect(() => {
     const handleFocus = () => {
-      if (mountedRef.current && hasInitialized.current) {
-        // Only reset if we're somehow drifted from daily AND user can't select ranges
+      if (state.mounted && state.initialized) {
+        // Only reset if drifted from daily AND user can't select ranges
         if (!isDaily && !canSelectDateRange) {
-          console.log('[ProfitPage] ✓ Window focused - correcting drift to Daily');
-          safeResetToDaily();
+          atomicResetToDaily('focus-drift-correction');
         }
       }
     };
     
+    // Register all handlers
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [safeResetToDaily, isDaily, canSelectDateRange]);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [atomicResetToDaily, isDaily, canSelectDateRange]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // AUTHENTICATION & DATA LOADING
@@ -182,7 +229,7 @@ export default function ProfitPage() {
       getSales(),
       getExpenses()
     ]);
-    if (mountedRef.current) {
+    if (stateRef.current.mounted) {
       setAllSales(salesData.sort((a, b) => b.date - a.date));
       setAllExpenses(expensesData);
     }
