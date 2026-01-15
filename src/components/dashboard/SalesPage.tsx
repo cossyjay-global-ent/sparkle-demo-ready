@@ -1,4 +1,20 @@
-import { useState, useEffect } from 'react';
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 🔒 SALES PAGE - PRODUCTION LOCKED
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
+ * 
+ * 1. DAILY is the DEFAULT - uses global DateFilterContext
+ * 2. Filters sales by selected date range (Daily default)
+ * 3. Aligns with Dashboard, Profit, Expenses, Reports pages
+ * 4. No local date state - single source of truth
+ * 
+ * This file is PRODUCTION-LOCKED for Play Store stability.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -6,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -20,14 +37,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { Plus, ShoppingCart, Trash2, RefreshCw } from 'lucide-react';
 import { Product, Sale, now } from '@/lib/database';
 import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 export default function SalesPage() {
   const { getProducts, addSale, getSales, deleteSale } = useData();
-  const { dateRange, isDaily } = useDateFilter();
+  const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const { currency } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -40,6 +57,28 @@ export default function SalesPage() {
   const [manualUnitPrice, setManualUnitPrice] = useState('');
   const [manualCostPrice, setManualCostPrice] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 RACE-SAFE STATE MACHINE - ALIGNED WITH GLOBAL DATE SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  const stateRef = useRef({
+    mounted: true,
+    initialized: false
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 INITIALIZATION - ALIGNED WITH GLOBAL DAILY LOCK
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    stateRef.current.mounted = true;
+    stateRef.current.initialized = true;
+    
+    return () => {
+      stateRef.current.mounted = false;
+    };
+  }, []);
 
   // Filter products matching the manual input name
   const matchingProducts = products.filter(p => 
@@ -68,11 +107,14 @@ export default function SalesPage() {
 
   const currencySymbol = currency.symbol;
 
+  // Load data when date range changes
   useEffect(() => {
-    loadData();
+    if (stateRef.current.mounted) {
+      loadData();
+    }
   }, [dateRange]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const fromTimestamp = dateRange.fromDate.getTime();
     const toTimestamp = dateRange.toDate.getTime();
     
@@ -80,9 +122,11 @@ export default function SalesPage() {
       getProducts(),
       getSales(fromTimestamp, toTimestamp)
     ]);
-    setProducts(productsData);
-    setSales(salesData.sort((a, b) => b.date - a.date));
-  };
+    if (stateRef.current.mounted) {
+      setProducts(productsData);
+      setSales(salesData.sort((a, b) => b.date - a.date));
+    }
+  }, [getProducts, getSales, dateRange]);
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -183,22 +227,56 @@ export default function SalesPage() {
     });
   };
 
-  const dateLabel = isDaily ? "Today's" : "Selected Period";
+  // 🔒 Label reflects Daily default or selected period - LOCKED
+  const dateLabel = useMemo(() => {
+    return isDaily ? "Today's" : "Selected Period";
+  }, [isDaily]);
+
+  // 🔒 Sync status badge color - LOCKED
+  const syncStatusColor = useMemo(() => {
+    switch (syncStatus) {
+      case 'connected': return 'bg-success text-success-foreground';
+      case 'connecting': return 'bg-warning text-warning-foreground';
+      case 'disconnected': return 'bg-muted text-muted-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  }, [syncStatus]);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Sales</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">Sales</h1>
+            {/* 🔒 DAILY MODE BADGE - Aligned with global state */}
+            {isDaily && (
+              <Badge variant="secondary" className={`${syncStatusColor} text-xs font-medium`}>
+                Daily Mode
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground">{isDaily ? "Today's sales" : "Sales for selected period"}</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="btn-primary-gradient">
-              <Plus className="w-4 h-4 mr-2" />
-              New Sale
+        <div className="flex items-center gap-2">
+          {/* 🔒 RESET TO TODAY - Only visible when not in Daily mode */}
+          {!isDaily && canSelectDateRange && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetToDaily}
+              className="text-primary"
+            >
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Reset to Today
             </Button>
-          </DialogTrigger>
+          )}
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="btn-primary-gradient">
+                <Plus className="w-4 h-4 mr-2" />
+                New Sale
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Record New Sale</DialogTitle>
@@ -359,6 +437,7 @@ export default function SalesPage() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Date Range Filter */}

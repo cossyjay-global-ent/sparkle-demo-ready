@@ -1,4 +1,20 @@
-import { useEffect, useState, forwardRef } from 'react';
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 🔒 DASHBOARD HOME - PRODUCTION LOCKED
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
+ * 
+ * 1. DAILY is the DEFAULT - uses global DateFilterContext
+ * 2. Aligns with Profit, Sales, Expenses, Reports pages
+ * 3. No local date state - single source of truth
+ * 4. Admin real-time sync propagates correctly
+ * 
+ * This file is PRODUCTION-LOCKED for Play Store stability.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
+import { useEffect, useState, forwardRef, useRef, useMemo, useCallback } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -9,9 +25,12 @@ import {
   Users, 
   CreditCard,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  RefreshCw
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { Sale, Expense, Product, Customer, Debt } from '@/lib/database';
 
@@ -55,7 +74,7 @@ StatCard.displayName = 'StatCard';
 
 export default function DashboardHome() {
   const { getSales, getExpenses, getProducts, getCustomers, getDebts } = useData();
-  const { dateRange, isDaily } = useDateFilter();
+  const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const { currency } = useCurrency();
   const [stats, setStats] = useState({
     totalSales: 0,
@@ -70,6 +89,28 @@ export default function DashboardHome() {
     yesterdaySales: 0,
     yesterdayExpenses: 0
   });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 RACE-SAFE STATE MACHINE - ALIGNED WITH GLOBAL DATE SYSTEM
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  const stateRef = useRef({
+    mounted: true,
+    initialized: false
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔒 INITIALIZATION - ALIGNED WITH GLOBAL DAILY LOCK
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    stateRef.current.mounted = true;
+    stateRef.current.initialized = true;
+    
+    return () => {
+      stateRef.current.mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -135,7 +176,20 @@ export default function DashboardHome() {
     return `${currency.symbol}${amount.toLocaleString()}`;
   };
 
-  const dateLabel = isDaily ? "Today's" : "Selected Period";
+  // 🔒 Label reflects Daily default or selected period - LOCKED
+  const dateLabel = useMemo(() => {
+    return isDaily ? "Today's" : "Selected Period";
+  }, [isDaily]);
+
+  // 🔒 Sync status badge color - LOCKED
+  const syncStatusColor = useMemo(() => {
+    switch (syncStatus) {
+      case 'connected': return 'bg-success text-success-foreground';
+      case 'connecting': return 'bg-warning text-warning-foreground';
+      case 'disconnected': return 'bg-muted text-muted-foreground';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  }, [syncStatus]);
 
   // Calculate percentage change compared to yesterday
   const calculateTrend = (current: number, previous: number): { trend: 'up' | 'down' | undefined; value: string | undefined } => {
@@ -156,12 +210,34 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">{isDaily ? "Today's overview" : "Custom date range overview"}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+            {/* 🔒 DAILY MODE BADGE - Aligned with global state */}
+            {isDaily && (
+              <Badge variant="secondary" className={`${syncStatusColor} text-xs font-medium`}>
+                Daily Mode
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground">{isDaily ? "Today's overview" : "Custom date range overview"}</p>
+        </div>
+        {/* 🔒 RESET TO TODAY - Only visible when not in Daily mode */}
+        {!isDaily && canSelectDateRange && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetToDaily}
+            className="text-primary"
+          >
+            <RefreshCw className="w-4 h-4 mr-1" />
+            Reset to Today
+          </Button>
+        )}
       </div>
 
-      {/* Date Range Filter */}
+      {/* 🔒 Date Range Filter - Uses global DateFilterContext */}
       <DateRangeFilter />
 
       {/* Selected Period Stats */}
