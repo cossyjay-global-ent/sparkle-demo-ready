@@ -143,7 +143,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed left-0 top-0 h-full w-64 bg-sidebar-background border-r border-sidebar-border z-50 transition-transform duration-300 ease-out lg:translate-x-0 lg:static flex flex-col",
+        "fixed left-0 top-0 h-full w-64 bg-white dark:bg-card border-r border-sidebar-border z-50 transition-transform duration-300 ease-out lg:translate-x-0 lg:static flex flex-col",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Sidebar Header */}
