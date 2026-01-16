@@ -269,24 +269,6 @@ export default function DashboardHome() {
         />
       </div>
 
-      {/* All-Time Summary Section */}
-      <div>
-        <h2 className="text-lg font-semibold text-foreground mb-4">All-Time Summary</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard
-            title="Total All-Time Sales"
-            value={formatCurrency(stats.totalSales)}
-            subtitle="Cumulative since start"
-            icon={<ShoppingCart className="w-5 h-5 text-success" />}
-          />
-          <StatCard
-            title="Total All-Time Expenses"
-            value={formatCurrency(stats.totalExpenses)}
-            subtitle="Cumulative since start"
-            icon={<Receipt className="w-5 h-5 text-warning" />}
-          />
-        </div>
-      </div>
 
       {/* Debt Summary */}
       <div>
