@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
+import { useData } from '@/contexts/DataContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -39,10 +41,28 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   const [isOpen, setIsOpen] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [allTimeStats, setAllTimeStats] = useState({ totalSales: 0, totalExpenses: 0 });
   const { logout, isOnline } = useAuth();
   const { role, canViewProfit, canViewAuditLogs } = useRBAC();
+  const { getSales, getExpenses } = useData();
+  const { currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Load all-time stats
+  useEffect(() => {
+    const loadAllTimeStats = async () => {
+      const [sales, expenses] = await Promise.all([getSales(), getExpenses()]);
+      const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
+      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+      setAllTimeStats({ totalSales, totalExpenses });
+    };
+    loadAllTimeStats();
+  }, [getSales, getExpenses]);
+
+  const formatCurrency = (amount: number) => {
+    return `${currency.symbol}${amount.toLocaleString()}`;
+  };
 
   // Check if app is in standalone mode (installed)
   useEffect(() => {
@@ -231,6 +251,29 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
             </button>
           ))}
         </nav>
+
+        {/* All-Time Summary */}
+        <div className="px-4 py-3 border-t border-sidebar-border flex-shrink-0">
+          <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider mb-3">
+            All-Time Summary
+          </p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-success/10">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-success" />
+                <span className="text-xs text-sidebar-foreground">Sales</span>
+              </div>
+              <span className="text-sm font-semibold text-success">{formatCurrency(allTimeStats.totalSales)}</span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-warning/10">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-warning" />
+                <span className="text-xs text-sidebar-foreground">Expenses</span>
+              </div>
+              <span className="text-sm font-semibold text-warning">{formatCurrency(allTimeStats.totalExpenses)}</span>
+            </div>
+          </div>
+        </div>
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-sidebar-border flex-shrink-0">
