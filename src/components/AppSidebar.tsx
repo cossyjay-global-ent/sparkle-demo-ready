@@ -20,7 +20,8 @@ import {
   User,
   HelpCircle,
   Info,
-  Download
+  Download,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
@@ -42,6 +43,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   const [canInstall, setCanInstall] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [allTimeStats, setAllTimeStats] = useState({ totalSales: 0, totalExpenses: 0 });
+  const [showAllTimeSummary, setShowAllTimeSummary] = useState(false);
   const { logout, isOnline } = useAuth();
   const { role, canViewProfit, canViewAuditLogs } = useRBAC();
   const { getSales, getExpenses } = useData();
@@ -252,27 +254,33 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
           ))}
         </nav>
 
-        {/* All-Time Summary */}
+        {/* All-Time Summary - Collapsible */}
         <div className="px-4 py-3 border-t border-sidebar-border flex-shrink-0">
-          <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider mb-3">
-            All-Time Summary
-          </p>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-success/10">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-success" />
-                <span className="text-xs text-sidebar-foreground">Sales</span>
+          <button
+            onClick={() => setShowAllTimeSummary(!showAllTimeSummary)}
+            className="flex items-center justify-between w-full text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider hover:text-sidebar-foreground transition-colors"
+          >
+            <span>All-Time Summary</span>
+            <ChevronDown className={cn("w-4 h-4 transition-transform", showAllTimeSummary && "rotate-180")} />
+          </button>
+          {showAllTimeSummary && (
+            <div className="space-y-2 mt-3">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-success/10">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="w-4 h-4 text-success" />
+                  <span className="text-xs text-sidebar-foreground">Sales</span>
+                </div>
+                <span className="text-sm font-semibold text-success">{formatCurrency(allTimeStats.totalSales)}</span>
               </div>
-              <span className="text-sm font-semibold text-success">{formatCurrency(allTimeStats.totalSales)}</span>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-warning/10">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-warning" />
-                <span className="text-xs text-sidebar-foreground">Expenses</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-warning/10">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-warning" />
+                  <span className="text-xs text-sidebar-foreground">Expenses</span>
+                </div>
+                <span className="text-sm font-semibold text-warning">{formatCurrency(allTimeStats.totalExpenses)}</span>
               </div>
-              <span className="text-sm font-semibold text-warning">{formatCurrency(allTimeStats.totalExpenses)}</span>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer Actions */}
