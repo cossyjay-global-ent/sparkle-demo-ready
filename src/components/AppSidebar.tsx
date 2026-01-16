@@ -149,13 +149,13 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         {/* Sidebar Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-sidebar-foreground" />
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4 text-primary-foreground" />
             </div>
             <div>
               <h2 className="font-bold text-sm text-sidebar-foreground">Offline POS</h2>
               {role && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-white/20 text-sidebar-foreground border-0">
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-0">
                   {role}
                 </Badge>
               )}
@@ -165,7 +165,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
             variant="ghost"
             size="icon"
             onClick={() => setIsOpen(false)}
-            className="lg:hidden text-sidebar-foreground hover:bg-white/20"
+            className="lg:hidden text-sidebar-foreground hover:bg-primary/10"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -175,7 +175,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         <div className="px-4 py-3 border-b border-sidebar-border flex-shrink-0">
           <div className={cn(
             "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium w-full justify-center",
-            isOnline ? "bg-white/20 text-sidebar-foreground" : "bg-warning/20 text-warning"
+            isOnline ? "bg-success/10 text-success" : "bg-warning/20 text-warning"
           )}>
             {isOnline ? (
               <>
@@ -236,7 +236,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
         <div className="p-4 border-t border-sidebar-border flex-shrink-0">
           <Button
             variant="outline"
-            className="w-full mb-2 border-white/30 text-sidebar-foreground hover:bg-white/20 hover:text-sidebar-foreground bg-transparent"
+            className="w-full mb-2 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary bg-transparent"
             disabled={!isOnline}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
@@ -244,7 +244,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
           </Button>
           <Button
             variant="ghost"
-            className="w-full text-red-200 hover:text-white hover:bg-red-500/30"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={logout}
           >
             <LogOut className="w-4 h-4 mr-2" />
