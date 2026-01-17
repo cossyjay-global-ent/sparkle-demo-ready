@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,21 +46,21 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   const [showAllTimeSummary, setShowAllTimeSummary] = useState(false);
   const { logout, isOnline } = useAuth();
   const { role, canViewProfit, canViewAuditLogs } = useRBAC();
-  const { getSales, getExpenses } = useData();
+  const { getSales, getExpenses, dataVersion } = useCloudData();
   const { currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Load all-time stats
+  // CLOUD-SYNC-CRITICAL: Load all-time stats with real-time updates
   useEffect(() => {
     const loadAllTimeStats = async () => {
       const [sales, expenses] = await Promise.all([getSales(), getExpenses()]);
-      const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const totalSales = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+      const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       setAllTimeStats({ totalSales, totalExpenses });
     };
     loadAllTimeStats();
-  }, [getSales, getExpenses]);
+  }, [getSales, getExpenses, dataVersion]);
 
   const formatCurrency = (amount: number) => {
     return `${currency.symbol}${amount.toLocaleString()}`;

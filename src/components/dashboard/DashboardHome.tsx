@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * 🔒 DASHBOARD HOME - PRODUCTION LOCKED
+ * 🔒 DASHBOARD HOME - PRODUCTION LOCKED + CLOUD SYNC
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
@@ -8,14 +8,14 @@
  * 1. DAILY is the DEFAULT - uses global DateFilterContext
  * 2. Aligns with Profit, Sales, Expenses, Reports pages
  * 3. No local date state - single source of truth
- * 4. Admin real-time sync propagates correctly
+ * 4. CLOUD-SYNC-CRITICAL: All data comes from Supabase with real-time updates
  * 
  * This file is PRODUCTION-LOCKED for Play Store stability.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useEffect, useState, forwardRef, useRef, useMemo, useCallback } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { 
@@ -26,13 +26,13 @@ import {
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
-  RefreshCw
+  RefreshCw,
+  CloudIcon
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
-import { Sale, Expense, Product, Customer, Debt } from '@/lib/database';
 
 interface StatCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
@@ -73,7 +73,8 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
 StatCard.displayName = 'StatCard';
 
 export default function DashboardHome() {
-  const { getSales, getExpenses, getProducts, getCustomers, getDebts } = useData();
+  // CLOUD-SYNC-CRITICAL: Use cloud data context with real-time updates
+  const { getSales, getExpenses, getProducts, getCustomers, getDebts, dataVersion, lastSyncTime } = useCloudData();
   const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const { currency } = useCurrency();
   const [stats, setStats] = useState({
@@ -89,6 +90,7 @@ export default function DashboardHome() {
     yesterdaySales: 0,
     yesterdayExpenses: 0
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 🔒 RACE-SAFE STATE MACHINE - ALIGNED WITH GLOBAL DATE SYSTEM
@@ -112,65 +114,89 @@ export default function DashboardHome() {
     };
   }, []);
 
+  // CLOUD-SYNC-CRITICAL: Re-fetch data when dataVersion changes (real-time updates)
   useEffect(() => {
     const loadStats = async () => {
-      const fromTimestamp = dateRange.fromDate.getTime();
-      const toTimestamp = dateRange.toDate.getTime();
+      if (!stateRef.current.mounted) return;
+      
+      setIsLoading(true);
 
       // Calculate yesterday's date range
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStart = yesterday.getTime();
       const yesterdayEnd = new Date(yesterday);
       yesterdayEnd.setHours(23, 59, 59, 999);
-      const yesterdayEndTimestamp = yesterdayEnd.getTime();
 
-      const [sales, expenses, products, customers, debts] = await Promise.all([
-        getSales(),
-        getExpenses(),
-        getProducts(),
-        getCustomers(),
-        getDebts()
-      ]);
+      try {
+        // CLOUD-SYNC-CRITICAL: Fetch all data from Supabase
+        const [sales, expenses, products, customers, debts] = await Promise.all([
+          getSales(),
+          getExpenses(),
+          getProducts(),
+          getCustomers(),
+          getDebts()
+        ]);
 
-      const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-      const totalDebts = debts.reduce((sum, d) => sum + d.totalAmount, 0);
-      const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
-      
-      // Filter by date range (current selection)
-      const filteredSalesData = sales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
-      const filteredSales = filteredSalesData.reduce((sum, s) => sum + s.totalAmount, 0);
+        if (!stateRef.current.mounted) return;
 
-      const filteredExpensesData = expenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
-      const filteredExpenses = filteredExpensesData.reduce((sum, e) => sum + e.amount, 0);
+        const totalSales = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+        const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        const totalDebts = debts.reduce((sum, d) => sum + Number(d.total_amount || 0), 0);
+        const totalPaid = debts.reduce((sum, d) => sum + Number(d.paid_amount || 0), 0);
+        
+        // Filter by date range (current selection)
+        const fromDate = dateRange.fromDate;
+        const toDate = dateRange.toDate;
+        
+        const filteredSalesData = sales.filter(s => {
+          const saleDate = new Date(s.date);
+          return saleDate >= fromDate && saleDate <= toDate;
+        });
+        const filteredSales = filteredSalesData.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
 
-      // Calculate yesterday's totals for trend comparison
-      const yesterdaySalesData = sales.filter(s => s.date >= yesterdayStart && s.date <= yesterdayEndTimestamp);
-      const yesterdaySales = yesterdaySalesData.reduce((sum, s) => sum + s.totalAmount, 0);
+        const filteredExpensesData = expenses.filter(e => {
+          const expenseDate = new Date(e.date);
+          return expenseDate >= fromDate && expenseDate <= toDate;
+        });
+        const filteredExpenses = filteredExpensesData.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-      const yesterdayExpensesData = expenses.filter(e => e.date >= yesterdayStart && e.date <= yesterdayEndTimestamp);
-      const yesterdayExpenses = yesterdayExpensesData.reduce((sum, e) => sum + e.amount, 0);
+        // Calculate yesterday's totals for trend comparison
+        const yesterdaySalesData = sales.filter(s => {
+          const saleDate = new Date(s.date);
+          return saleDate >= yesterday && saleDate <= yesterdayEnd;
+        });
+        const yesterdaySales = yesterdaySalesData.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
 
-      setStats({
-        totalSales,
-        totalExpenses,
-        totalProducts: products.length,
-        totalCustomers: customers.length,
-        totalDebts,
-        totalPaid,
-        totalOutstanding: totalDebts - totalPaid,
-        filteredSales,
-        filteredExpenses,
-        yesterdaySales,
-        yesterdayExpenses
-      });
+        const yesterdayExpensesData = expenses.filter(e => {
+          const expenseDate = new Date(e.date);
+          return expenseDate >= yesterday && expenseDate <= yesterdayEnd;
+        });
+        const yesterdayExpenses = yesterdayExpensesData.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+        setStats({
+          totalSales,
+          totalExpenses,
+          totalProducts: products.length,
+          totalCustomers: customers.length,
+          totalDebts,
+          totalPaid,
+          totalOutstanding: totalDebts - totalPaid,
+          filteredSales,
+          filteredExpenses,
+          yesterdaySales,
+          yesterdayExpenses
+        });
+      } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadStats();
-  }, [getSales, getExpenses, getProducts, getCustomers, getDebts, dateRange]);
+  }, [getSales, getExpenses, getProducts, getCustomers, getDebts, dateRange, dataVersion]);
 
   const formatCurrency = (amount: number) => {
     return `${currency.symbol}${amount.toLocaleString()}`;
@@ -218,6 +244,13 @@ export default function DashboardHome() {
             {isDaily && (
               <Badge variant="secondary" className={`${syncStatusColor} text-xs font-medium`}>
                 Daily Mode
+              </Badge>
+            )}
+            {/* CLOUD-SYNC-CRITICAL: Show cloud sync indicator */}
+            {lastSyncTime && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <CloudIcon className="w-3 h-3 mr-1" />
+                Synced
               </Badge>
             )}
           </div>

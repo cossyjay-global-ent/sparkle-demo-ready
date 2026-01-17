@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * 🔒 SALES PAGE - PRODUCTION LOCKED
+ * 🔒 SALES PAGE - PRODUCTION LOCKED + CLOUD SYNC
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
@@ -8,14 +8,14 @@
  * 1. DAILY is the DEFAULT - uses global DateFilterContext
  * 2. Filters sales by selected date range (Daily default)
  * 3. Aligns with Dashboard, Profit, Expenses, Reports pages
- * 4. No local date state - single source of truth
+ * 4. CLOUD-SYNC-CRITICAL: All data comes from Supabase with real-time updates
  * 
  * This file is PRODUCTION-LOCKED for Play Store stability.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
@@ -37,13 +37,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, ShoppingCart, Trash2, RefreshCw } from 'lucide-react';
-import { Product, Sale, now } from '@/lib/database';
+import { Plus, ShoppingCart, Trash2, RefreshCw, CloudIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Product = Tables<'products'>;
+type Sale = Tables<'sales'>;
 
 export default function SalesPage() {
-  const { getProducts, addSale, getSales, deleteSale } = useData();
+  // CLOUD-SYNC-CRITICAL: Use cloud data context with real-time updates
+  const { getProducts, addSale, getSales, deleteSale, dataVersion, lastSyncTime } = useCloudData();
   const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const { currency } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
@@ -94,37 +98,42 @@ export default function SalesPage() {
     // Find exact match to auto-fill cost price only (unit price stays manual)
     const exactMatch = products.find(p => p.name.toLowerCase() === value.toLowerCase().trim());
     if (exactMatch) {
-      setManualCostPrice(exactMatch.costPrice.toString());
+      setManualCostPrice(exactMatch.cost_price.toString());
     }
   };
 
   // Select a suggested product (only auto-fill cost price, not unit price)
   const handleSelectSuggestion = (product: Product) => {
     setManualProductName(product.name);
-    setManualCostPrice(product.costPrice.toString());
+    setManualCostPrice(product.cost_price.toString());
     setShowSuggestions(false);
   };
 
   const currencySymbol = currency.symbol;
 
-  // Load data when date range changes
+  // CLOUD-SYNC-CRITICAL: Re-fetch data when dataVersion changes (real-time updates)
   useEffect(() => {
     if (stateRef.current.mounted) {
       loadData();
     }
-  }, [dateRange]);
+  }, [dateRange, dataVersion]);
 
   const loadData = useCallback(async () => {
-    const fromTimestamp = dateRange.fromDate.getTime();
-    const toTimestamp = dateRange.toDate.getTime();
+    if (!stateRef.current.mounted) return;
     
-    const [productsData, salesData] = await Promise.all([
-      getProducts(),
-      getSales(fromTimestamp, toTimestamp)
-    ]);
-    if (stateRef.current.mounted) {
-      setProducts(productsData);
-      setSales(salesData.sort((a, b) => b.date - a.date));
+    try {
+      const [productsData, salesData] = await Promise.all([
+        getProducts(),
+        getSales(dateRange.fromDate, dateRange.toDate)
+      ]);
+      
+      if (stateRef.current.mounted) {
+        setProducts(productsData);
+        // Sort by date descending
+        setSales(salesData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      }
+    } catch (error) {
+      console.error('Error loading sales data:', error);
     }
   }, [getProducts, getSales, dateRange]);
 
@@ -152,20 +161,18 @@ export default function SalesPage() {
 
       setIsLoading(true);
       const sale = await addSale({
-        productId: undefined,
-        productName: manualProductName.trim(),
+        product_id: undefined,
+        product_name: manualProductName.trim(),
         quantity: qty,
-        unitPrice: unitPrice,
-        costPrice: costPrice,
-        totalAmount: unitPrice * qty,
+        unit_price: unitPrice,
+        cost_price: costPrice,
+        total_amount: unitPrice * qty,
         profit: (unitPrice - costPrice) * qty,
-        date: now()
+        date: new Date().toISOString()
       });
 
       if (sale) {
-        toast({ title: "Success", description: "Sale recorded successfully" });
         resetForm();
-        loadData();
       }
       setIsLoading(false);
     } else {
@@ -179,20 +186,18 @@ export default function SalesPage() {
 
       setIsLoading(true);
       const sale = await addSale({
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
+        product_id: selectedProduct.id,
+        product_name: selectedProduct.name,
         quantity: qty,
-        unitPrice: selectedProduct.sellingPrice,
-        costPrice: selectedProduct.costPrice,
-        totalAmount: selectedProduct.sellingPrice * qty,
-        profit: (selectedProduct.sellingPrice - selectedProduct.costPrice) * qty,
-        date: now()
+        unit_price: selectedProduct.selling_price,
+        cost_price: selectedProduct.cost_price,
+        total_amount: selectedProduct.selling_price * qty,
+        profit: (selectedProduct.selling_price - selectedProduct.cost_price) * qty,
+        date: new Date().toISOString()
       });
 
       if (sale) {
-        toast({ title: "Success", description: "Sale recorded successfully" });
         resetForm();
-        loadData();
       }
       setIsLoading(false);
     }
@@ -209,16 +214,13 @@ export default function SalesPage() {
   };
 
   const handleDeleteSale = async (id: string) => {
-    if (await deleteSale(id)) {
-      toast({ title: "Deleted", description: "Sale record removed" });
-      loadData();
-    }
+    await deleteSale(id);
   };
 
-  const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const totalSales = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('en-NG', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-NG', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -252,6 +254,13 @@ export default function SalesPage() {
             {isDaily && (
               <Badge variant="secondary" className={`${syncStatusColor} text-xs font-medium`}>
                 Daily Mode
+              </Badge>
+            )}
+            {/* CLOUD-SYNC-CRITICAL: Show cloud sync indicator */}
+            {lastSyncTime && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <CloudIcon className="w-3 h-3 mr-1" />
+                Synced
               </Badge>
             )}
           </div>
@@ -314,7 +323,7 @@ export default function SalesPage() {
                     <SelectContent>
                       {products.filter(p => p.stock > 0).map(product => (
                         <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {currencySymbol}{product.sellingPrice} (Stock: {product.stock})
+                          {product.name} - {currencySymbol}{product.selling_price} (Stock: {product.stock})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -399,11 +408,11 @@ export default function SalesPage() {
                 <div className="p-4 bg-muted rounded-lg space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Unit Price:</span>
-                    <span className="font-medium">{currencySymbol}{selectedProduct.sellingPrice}</span>
+                    <span className="font-medium">{currencySymbol}{selectedProduct.selling_price}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total:</span>
-                    <span className="font-bold text-lg">{currencySymbol}{selectedProduct.sellingPrice * parseInt(quantity || '0')}</span>
+                    <span className="font-bold text-lg">{currencySymbol}{selectedProduct.selling_price * parseInt(quantity || '0')}</span>
                   </div>
                 </div>
               )}
@@ -427,73 +436,73 @@ export default function SalesPage() {
                   )}
                 </div>
               )}
+
               <Button
-                onClick={handleAddSale}
-                disabled={isManualInput ? (!manualProductName || !manualUnitPrice || isLoading) : (!selectedProductId || isLoading)}
                 className="w-full btn-primary-gradient"
+                onClick={handleAddSale}
+                disabled={isLoading || (!isManualInput && !selectedProduct)}
               >
-                Record Sale
+                {isLoading ? 'Recording...' : 'Record Sale'}
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
         </div>
       </div>
 
-      {/* Date Range Filter */}
+      {/* 🔒 Date Range Filter - Uses global DateFilterContext */}
       <DateRangeFilter />
 
-      {/* Grand Totals - Profit only visible in Profit section */}
+      {/* Grand Total Card */}
       <div className="grand-total-card">
-        <p className="text-primary-foreground/80 text-sm">Total Sales</p>
+        <p className="text-primary-foreground/80 text-sm mb-1">{dateLabel} Total Sales</p>
         <p className="text-3xl font-bold">{currencySymbol}{totalSales.toLocaleString()}</p>
       </div>
 
-      {/* Sales List - No profit column (profit only in Profit section) */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted">
-              <tr>
-                <th className="text-left p-4 font-medium text-muted-foreground">Product</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Qty</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Total</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Date</th>
-                <th className="text-left p-4 font-medium text-muted-foreground"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                    <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No sales recorded yet</p>
-                  </td>
-                </tr>
-              ) : (
-                sales.map(sale => (
-                  <tr key={sale.id} className="table-row-hover border-t border-border">
-                    <td className="p-4 font-medium">{sale.productName}</td>
-                    <td className="p-4">{sale.quantity}</td>
-                    <td className="p-4">{currencySymbol}{sale.totalAmount.toLocaleString()}</td>
-                    <td className="p-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
-                    <td className="p-4">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteSale(sale.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Sales List */}
+      <div className="space-y-3">
+        {sales.length === 0 ? (
+          <Card className="p-8 text-center">
+            <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">No sales recorded {isDaily ? 'today' : 'for selected period'}</p>
+          </Card>
+        ) : (
+          sales.map((sale) => (
+            <Card key={sale.id} className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-foreground">{sale.product_name}</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      x{sale.quantity}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {currencySymbol}{sale.unit_price} × {sale.quantity} = {currencySymbol}{sale.total_amount}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDate(sale.date)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="font-bold text-lg text-foreground">{currencySymbol}{sale.total_amount}</p>
+                    <p className="text-xs text-success">Profit: {currencySymbol}{sale.profit}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteSale(sale.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 }

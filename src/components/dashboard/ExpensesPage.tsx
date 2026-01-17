@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * 🔒 EXPENSES PAGE - PRODUCTION LOCKED
+ * 🔒 EXPENSES PAGE - PRODUCTION LOCKED + CLOUD SYNC
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * ⚠️ NON-NEGOTIABLE RULES - DO NOT MODIFY WITHOUT AUTHORIZATION:
@@ -8,14 +8,14 @@
  * 1. DAILY is the DEFAULT - uses global DateFilterContext
  * 2. Filters expenses by selected date range (Daily default)
  * 3. Aligns with Dashboard, Profit, Sales pages
- * 4. No local date state - single source of truth
+ * 4. CLOUD-SYNC-CRITICAL: All data comes from Supabase with real-time updates
  * 
  * This file is PRODUCTION-LOCKED for Play Store stability.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Receipt, Trash2, RefreshCw } from 'lucide-react';
-import { Expense, now } from '@/lib/database';
+import { Plus, Receipt, Trash2, RefreshCw, CloudIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Expense = Tables<'expenses'>;
 
 const EXPENSE_CATEGORIES = [
   'Utilities',
@@ -54,7 +56,8 @@ const EXPENSE_CATEGORIES = [
 ];
 
 export default function ExpensesPage() {
-  const { getExpenses, addExpense, deleteExpense } = useData();
+  // CLOUD-SYNC-CRITICAL: Use cloud data context with real-time updates
+  const { getExpenses, addExpense, deleteExpense, dataVersion, lastSyncTime } = useCloudData();
   const { currency } = useCurrency();
   const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
@@ -90,17 +93,21 @@ export default function ExpensesPage() {
     };
   }, []);
 
-  // Load expenses when date range changes
+  // CLOUD-SYNC-CRITICAL: Re-fetch data when dataVersion changes (real-time updates)
   useEffect(() => {
     if (stateRef.current.mounted) {
       loadExpenses();
     }
-  }, [dateRange]);
+  }, [dateRange, dataVersion]);
 
   const loadExpenses = useCallback(async () => {
-    const data = await getExpenses();
-    if (stateRef.current.mounted) {
-      setAllExpenses(data.sort((a, b) => b.date - a.date));
+    try {
+      const data = await getExpenses();
+      if (stateRef.current.mounted) {
+        setAllExpenses(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      }
+    } catch (error) {
+      console.error('Error loading expenses:', error);
     }
   }, [getExpenses]);
 
@@ -108,13 +115,15 @@ export default function ExpensesPage() {
   // 🔒 DATA FILTERING - ALIGNED WITH GLOBAL DATE SYSTEM
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const fromTimestamp = dateRange.fromDate.getTime();
-  const toTimestamp = dateRange.toDate.getTime();
-
   // Filter expenses by selected date range
   const filteredExpenses = useMemo(() => {
-    return allExpenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
-  }, [allExpenses, fromTimestamp, toTimestamp]);
+    const fromDate = dateRange.fromDate;
+    const toDate = dateRange.toDate;
+    return allExpenses.filter(e => {
+      const expenseDate = new Date(e.date);
+      return expenseDate >= fromDate && expenseDate <= toDate;
+    });
+  }, [allExpenses, dateRange]);
 
   const handleSubmit = async () => {
     if (!formData.description || !formData.amount || !formData.category) {
@@ -127,30 +136,25 @@ export default function ExpensesPage() {
       description: formData.description,
       amount: parseFloat(formData.amount),
       category: formData.category,
-      date: now()
+      date: new Date().toISOString()
     });
 
     if (expense) {
-      toast({ title: "Success", description: "Expense recorded" });
       setIsDialogOpen(false);
       setFormData({ description: '', amount: '', category: '' });
-      loadExpenses();
     }
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (await deleteExpense(id)) {
-      toast({ title: "Deleted", description: "Expense removed" });
-      loadExpenses();
-    }
+    await deleteExpense(id);
   };
 
   // Total for filtered period (not all-time)
-  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('en-NG', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-NG', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -159,7 +163,7 @@ export default function ExpensesPage() {
 
   // Group by category (filtered data)
   const byCategory = filteredExpenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount;
+    acc[e.category] = (acc[e.category] || 0) + Number(e.amount || 0);
     return acc;
   }, {} as Record<string, number>);
 
@@ -188,6 +192,13 @@ export default function ExpensesPage() {
             {isDaily && (
               <Badge variant="secondary" className={`${syncStatusColor} text-xs font-medium`}>
                 Daily Mode
+              </Badge>
+            )}
+            {/* CLOUD-SYNC-CRITICAL: Show cloud sync indicator */}
+            {lastSyncTime && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <CloudIcon className="w-3 h-3 mr-1" />
+                Synced
               </Badge>
             )}
           </div>
@@ -312,7 +323,7 @@ export default function ExpensesPage() {
                     <td className="p-4">
                       <span className="px-2 py-1 text-xs bg-muted rounded">{expense.category}</span>
                     </td>
-                    <td className="p-4 text-destructive font-medium">{currencySymbol}{expense.amount.toLocaleString()}</td>
+                    <td className="p-4 text-destructive font-medium">{currencySymbol}{Number(expense.amount).toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(expense.date)}</td>
                     <td className="p-4">
                       <Button
