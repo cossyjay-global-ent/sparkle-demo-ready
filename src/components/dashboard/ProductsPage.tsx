@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useData } from '@/contexts/DataContext';
+/**
+ * CLOUD-SYNC-CRITICAL: Products Page with real-time cloud synchronization
+ */
+
+import { useState, useEffect, useRef } from 'react';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -12,12 +17,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Package, Trash2, Edit2 } from 'lucide-react';
-import { Product, now } from '@/lib/database';
+import { Plus, Package, Trash2, Edit2, CloudIcon } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Product = Tables<'products'>;
 
 export default function ProductsPage() {
-  const { getProducts, addProduct, updateProduct, deleteProduct } = useData();
+  // CLOUD-SYNC-CRITICAL: Use cloud data context with real-time updates
+  const { getProducts, addProduct, updateProduct, deleteProduct, dataVersion, lastSyncTime } = useCloudData();
   const { currency } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -31,15 +39,29 @@ export default function ProductsPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  const stateRef = useRef({ mounted: true });
+
   const currencySymbol = currency.symbol;
 
   useEffect(() => {
-    loadProducts();
+    stateRef.current.mounted = true;
+    return () => { stateRef.current.mounted = false; };
   }, []);
 
+  // CLOUD-SYNC-CRITICAL: Re-fetch data when dataVersion changes (real-time updates)
+  useEffect(() => {
+    loadProducts();
+  }, [dataVersion]);
+
   const loadProducts = async () => {
-    const data = await getProducts();
-    setProducts(data.sort((a, b) => b.createdAt - a.createdAt));
+    try {
+      const data = await getProducts();
+      if (stateRef.current.mounted) {
+        setProducts(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+    }
   };
 
   const resetForm = () => {
@@ -52,8 +74,8 @@ export default function ProductsPage() {
       setEditingProduct(product);
       setFormData({
         name: product.name,
-        costPrice: product.costPrice.toString(),
-        sellingPrice: product.sellingPrice.toString(),
+        costPrice: product.cost_price.toString(),
+        sellingPrice: product.selling_price.toString(),
         stock: product.stock.toString(),
         category: product.category || ''
       });
@@ -74,10 +96,10 @@ export default function ProductsPage() {
     if (editingProduct) {
       const success = await updateProduct(editingProduct.id, {
         name: formData.name,
-        costPrice: parseFloat(formData.costPrice),
-        sellingPrice: parseFloat(formData.sellingPrice),
+        cost_price: parseFloat(formData.costPrice),
+        selling_price: parseFloat(formData.sellingPrice),
         stock: parseInt(formData.stock),
-        category: formData.category || undefined
+        category: formData.category || null
       });
       if (success) {
         toast({ title: "Success", description: "Product updated" });
@@ -85,38 +107,43 @@ export default function ProductsPage() {
     } else {
       const product = await addProduct({
         name: formData.name,
-        costPrice: parseFloat(formData.costPrice),
-        sellingPrice: parseFloat(formData.sellingPrice),
+        cost_price: parseFloat(formData.costPrice),
+        selling_price: parseFloat(formData.sellingPrice),
         stock: parseInt(formData.stock),
-        category: formData.category || undefined
+        category: formData.category || null
       });
       if (product) {
-        toast({ title: "Success", description: "Product added" });
+        // Real-time will handle the refresh
       }
     }
 
     setIsDialogOpen(false);
     resetForm();
-    loadProducts();
     setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (await deleteProduct(id)) {
-      toast({ title: "Deleted", description: "Product removed" });
-      loadProducts();
-    }
+    await deleteProduct(id);
   };
 
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-  const totalValue = products.reduce((sum, p) => sum + (p.sellingPrice * p.stock), 0);
+  const totalValue = products.reduce((sum, p) => sum + (p.selling_price * p.stock), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Products</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">Products</h1>
+            {/* CLOUD-SYNC-CRITICAL: Show cloud sync indicator */}
+            {lastSyncTime && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                <CloudIcon className="w-3 h-3 mr-1" />
+                Synced
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground">Manage your inventory</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
@@ -250,11 +277,11 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Cost</p>
-                  <p className="font-medium">{currencySymbol}{product.costPrice.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{product.cost_price.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">{currencySymbol}{product.sellingPrice.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{product.selling_price.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
@@ -262,7 +289,7 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Profit</p>
-                  <p className="font-medium text-success">{currencySymbol}{(product.sellingPrice - product.costPrice).toLocaleString()}</p>
+                  <p className="font-medium text-success">{currencySymbol}{(product.selling_price - product.cost_price).toLocaleString()}</p>
                 </div>
               </div>
             </Card>

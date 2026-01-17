@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { DataProvider } from "@/contexts/DataContext";
+import { CloudDataProvider } from "@/contexts/CloudDataContext";
 import { RBACProvider } from "@/contexts/RBACContext";
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
@@ -75,7 +75,7 @@ const App = () => {
               <RBACProvider>
                 <DateFilterProvider>
                   <CurrencyProvider>
-                    <DataProvider>
+                    <CloudDataProvider>
                       <Toaster />
                       <Sonner />
                       <UpdateNotification />
@@ -107,7 +107,7 @@ const App = () => {
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </BrowserRouter>
-                    </DataProvider>
+                    </CloudDataProvider>
                   </CurrencyProvider>
                 </DateFilterProvider>
               </RBACProvider>
