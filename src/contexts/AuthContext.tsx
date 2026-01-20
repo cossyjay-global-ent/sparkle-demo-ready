@@ -78,21 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load profit password hash from profiles table
-  const loadProfitPassword = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('profit_password_hash')
-        .eq('user_id', userId)
-        .single();
-      
-      if (!error && data) {
-        setProfitPasswordHash((data as { profit_password_hash?: string }).profit_password_hash || null);
-      }
-    } catch (error) {
-      console.error('Error loading profit password:', error);
-    }
+  // Load profit password hash from localStorage (column not in DB yet)
+  const loadProfitPassword = (userId: string) => {
+    const hash = localStorage.getItem(`profit_password_${userId}`);
+    setProfitPasswordHash(hash);
   };
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
@@ -180,16 +169,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user?.id) return false;
 
     try {
-      // Simple hash for profit password (not for sensitive auth)
+      // Simple hash for profit password stored in localStorage
       const hash = btoa(password);
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({ profit_password_hash: hash })
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
+      localStorage.setItem(`profit_password_${user.id}`, hash);
       setProfitPasswordHash(hash);
 
       toast({
