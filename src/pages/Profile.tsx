@@ -132,7 +132,7 @@ const Profile = () => {
                   <Calendar className="w-4 h-4" />
                   Member Since
                 </Label>
-                <p className="font-medium">{formatDate(user?.createdAt)}</p>
+                <p className="font-medium">{formatDate(user?.created_at)}</p>
               </div>
             </CardContent>
           </Card>
