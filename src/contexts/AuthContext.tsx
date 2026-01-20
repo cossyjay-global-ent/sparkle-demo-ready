@@ -1,11 +1,17 @@
+/**
+ * CLOUD-SYNC-CRITICAL: Auth Context using Supabase Auth
+ * This provides the single source of truth for user authentication.
+ * All auth operations go through Supabase for proper RLS enforcement.
+ */
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { db, User, generateId, now, AppSettings } from '@/lib/database';
-import { hashPassword, verifyPassword } from '@/lib/crypto';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  settings: AppSettings | null;
+  session: Session | null;
   isLoading: boolean;
   isOnline: boolean;
   login: (email: string, password: string) => Promise<boolean>;
@@ -18,13 +24,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const SESSION_KEY = 'offline-pos-session';
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [profitPasswordHash, setProfitPasswordHash] = useState<string | null>(null);
 
   // Listen for online/offline status
   useEffect(() => {
@@ -40,70 +45,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Load session on mount
+  // CLOUD-SYNC-CRITICAL: Initialize auth state from Supabase
   useEffect(() => {
-    const loadSession = async () => {
-      try {
-        const sessionData = localStorage.getItem(SESSION_KEY);
-        if (sessionData) {
-          const { userId, email } = JSON.parse(sessionData);
-          const existingUser = await db.users.get(userId);
-          if (existingUser && existingUser.email === email) {
-            setUser(existingUser);
-            const userSettings = await db.appSettings.where('userId').equals(userId).first();
-            setSettings(userSettings || null);
-          } else {
-            localStorage.removeItem(SESSION_KEY);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading session:', error);
-        localStorage.removeItem(SESSION_KEY);
-      } finally {
-        setIsLoading(false);
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+      
+      // Load profit password from profile if user exists
+      if (session?.user?.id) {
+        loadProfitPassword(session.user.id);
       }
-    };
+    });
 
-    loadSession();
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[Auth] Auth state changed:', event);
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+        
+        if (session?.user?.id) {
+          loadProfitPassword(session.user.id);
+        } else {
+          setProfitPasswordHash(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Load profit password hash from profiles table
+  const loadProfitPassword = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('profit_password_hash')
+        .eq('user_id', userId)
+        .single();
+      
+      if (!error && data) {
+        setProfitPasswordHash((data as { profit_password_hash?: string }).profit_password_hash || null);
+      }
+    } catch (error) {
+      console.error('Error loading profit password:', error);
+    }
+  };
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      const normalizedEmail = email.toLowerCase().trim();
-      const existingUser = await db.users.where('email').equals(normalizedEmail).first();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
 
-      if (!existingUser) {
+      if (error) {
         toast({
           title: "Login Failed",
-          description: "No account found with this email",
+          description: error.message,
           variant: "destructive"
         });
         return false;
       }
-
-      if (!verifyPassword(password, existingUser.passwordHash)) {
-        toast({
-          title: "Login Failed",
-          description: "Incorrect password",
-          variant: "destructive"
-        });
-        return false;
-      }
-
-      // Update last login
-      await db.users.update(existingUser.id, { updatedAt: now() });
-
-      // Save session
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
-        userId: existingUser.id,
-        email: existingUser.email
-      }));
-
-      setUser(existingUser);
-
-      // Load settings
-      const userSettings = await db.appSettings.where('userId').equals(existingUser.id).first();
-      setSettings(userSettings || null);
 
       toast({
         title: "Welcome back!",
@@ -124,53 +130,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
-      const normalizedEmail = email.toLowerCase().trim();
+      const { data, error } = await supabase.auth.signUp({
+        email: email.toLowerCase().trim(),
+        password,
+      });
 
-      // Check if user exists
-      const existingUser = await db.users.where('email').equals(normalizedEmail).first();
-      if (existingUser) {
+      if (error) {
         toast({
           title: "Signup Failed",
-          description: "An account with this email already exists",
+          description: error.message,
           variant: "destructive"
         });
         return false;
       }
-
-      // Create new user
-      const userId = generateId();
-      const newUser: User = {
-        id: userId,
-        email: normalizedEmail,
-        passwordHash: hashPassword(password),
-        createdAt: now(),
-        updatedAt: now()
-      };
-
-      await db.users.add(newUser);
-
-      // Create default settings
-      const defaultSettings: AppSettings = {
-        id: generateId(),
-        userId,
-        profitPasswordSet: false,
-        theme: 'light',
-        currency: 'NGN',
-        currencySymbol: '₦',
-        createdAt: now(),
-        updatedAt: now()
-      };
-
-      await db.appSettings.add(defaultSettings);
-
-      // Save session
-      localStorage.setItem(SESSION_KEY, JSON.stringify({
-        userId: newUser.id,
-        email: newUser.email
-      }));
-
-      setUser(newUser);
-      setSettings(defaultSettings);
 
       toast({
         title: "Account Created!",
@@ -190,9 +162,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem(SESSION_KEY);
+    await supabase.auth.signOut();
     setUser(null);
-    setSettings(null);
+    setSession(null);
+    setProfitPasswordHash(null);
     toast({
       title: "Logged Out",
       description: "You have been successfully logged out"
@@ -200,26 +173,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const hasProfitPassword = useCallback((): boolean => {
-    return !!user?.profitPasswordHash;
-  }, [user]);
+    return !!profitPasswordHash;
+  }, [profitPasswordHash]);
 
   const setProfitPassword = useCallback(async (password: string): Promise<boolean> => {
-    if (!user) return false;
+    if (!user?.id) return false;
 
     try {
-      const hash = hashPassword(password);
-      await db.users.update(user.id, {
-        profitPasswordHash: hash,
-        updatedAt: now()
-      });
+      // Simple hash for profit password (not for sensitive auth)
+      const hash = btoa(password);
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ profit_password_hash: hash })
+        .eq('user_id', user.id);
 
-      await db.appSettings.where('userId').equals(user.id).modify({
-        profitPasswordSet: true,
-        updatedAt: now()
-      });
+      if (error) throw error;
 
-      setUser(prev => prev ? { ...prev, profitPasswordHash: hash } : null);
-      setSettings(prev => prev ? { ...prev, profitPasswordSet: true } : null);
+      setProfitPasswordHash(hash);
 
       toast({
         title: "Profit Password Set",
@@ -236,18 +207,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return false;
     }
-  }, [user]);
+  }, [user?.id]);
 
   const verifyProfitPassword = useCallback(async (password: string): Promise<boolean> => {
-    if (!user?.profitPasswordHash) return false;
-    return verifyPassword(password, user.profitPasswordHash);
-  }, [user]);
+    if (!profitPasswordHash) return false;
+    return btoa(password) === profitPasswordHash;
+  }, [profitPasswordHash]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        settings,
+        session,
         isLoading,
         isOnline,
         login,
