@@ -1,3 +1,10 @@
+/**
+ * APP SIDEBAR - Navigation with subscription-based feature gating
+ * 
+ * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+ * Developer account has access to all navigation items.
+ */
+
 import { useState, useEffect, forwardRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -21,12 +28,15 @@ import {
   HelpCircle,
   Info,
   Download,
-  ChevronDown
+  ChevronDown,
+  Crown,
+  Lock
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -45,9 +55,18 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   const [allTimeStats, setAllTimeStats] = useState({ totalSales: 0, totalExpenses: 0 });
   const [showAllTimeSummary, setShowAllTimeSummary] = useState(false);
   const { logout, isOnline } = useAuth();
-  const { role, canViewProfit, canViewAuditLogs } = useRBAC();
+  const { role, canViewProfit, canViewAuditLogs, isDeveloper: rbacIsDeveloper } = useRBAC();
   const { getSales, getExpenses, dataVersion } = useCloudData();
   const { currency } = useCurrency();
+  const { 
+    plan, 
+    canAccessProfit, 
+    canAccessReports, 
+    canAccessAuditLogs,
+    isDeveloper,
+    isPro,
+    isBusiness 
+  } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -104,25 +123,52 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
     };
   }, [isOpen]);
 
+  /**
+   * SUBSCRIPTION-GATED NAVIGATION
+   * Features are shown/hidden based on subscription plan AND RBAC role.
+   * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE: Developer sees everything.
+   */
   const mainNavItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
-    { path: '/dashboard/sales', label: 'Sales', icon: ShoppingCart, show: true },
-    { path: '/dashboard/products', label: 'Products', icon: Package, show: true },
-    { path: '/dashboard/expenses', label: 'Expenses', icon: Receipt, show: true },
-    { path: '/dashboard/profit', label: 'Profit', icon: TrendingUp, show: canViewProfit },
-    { path: '/dashboard/customers', label: 'Customers', icon: Users, show: true },
-    { path: '/dashboard/debts', label: 'Debts', icon: CreditCard, show: true },
-    { path: '/dashboard/reports', label: 'Reports', icon: BarChart3, show: true },
-    { path: '/dashboard/audit-logs', label: 'Audit Logs', icon: Shield, show: canViewAuditLogs },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true, locked: false },
+    { path: '/dashboard/sales', label: 'Sales', icon: ShoppingCart, show: true, locked: false },
+    { path: '/dashboard/products', label: 'Products', icon: Package, show: true, locked: false },
+    { path: '/dashboard/expenses', label: 'Expenses', icon: Receipt, show: true, locked: false },
+    { 
+      path: '/dashboard/profit', 
+      label: 'Profit', 
+      icon: TrendingUp, 
+      show: canViewProfit, 
+      locked: !canAccessProfit,
+      requiredPlan: 'pro' as const
+    },
+    { path: '/dashboard/customers', label: 'Customers', icon: Users, show: true, locked: false },
+    { path: '/dashboard/debts', label: 'Debts', icon: CreditCard, show: true, locked: false },
+    { 
+      path: '/dashboard/reports', 
+      label: 'Reports', 
+      icon: BarChart3, 
+      show: true, 
+      locked: !canAccessReports,
+      requiredPlan: 'pro' as const
+    },
+    { 
+      path: '/dashboard/audit-logs', 
+      label: 'Audit Logs', 
+      icon: Shield, 
+      show: canViewAuditLogs, 
+      locked: !canAccessAuditLogs,
+      requiredPlan: 'business' as const
+    },
   ];
 
   // Only show Install App if not installed and can install
   const secondaryNavItems = [
-    { path: '/settings', label: 'Settings', icon: Settings, show: true },
-    { path: '/profile', label: 'Profile', icon: User, show: true },
-    { path: '/install', label: 'Install App', icon: Download, show: !isStandalone && canInstall },
-    { path: '/support', label: 'Help & Support', icon: HelpCircle, show: true },
-    { path: '/about', label: 'About', icon: Info, show: true },
+    { path: '/settings', label: 'Settings', icon: Settings, show: true, locked: false },
+    { path: '/profile', label: 'Profile', icon: User, show: true, locked: false },
+    { path: '/upgrade', label: 'Upgrade', icon: Crown, show: !isDeveloper && !isBusiness, locked: false },
+    { path: '/install', label: 'Install App', icon: Download, show: !isStandalone && canInstall, locked: false },
+    { path: '/support', label: 'Help & Support', icon: HelpCircle, show: true, locked: false },
+    { path: '/about', label: 'About', icon: Info, show: true, locked: false },
   ];
 
   const isActive = (path: string) => {
@@ -170,27 +216,39 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
       )}>
         {/* Sidebar Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4 text-primary-foreground" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+                <ShoppingCart className="w-4 h-4 text-primary-foreground" />
+              </div>
+              <div>
+                <h2 className="font-bold text-sm text-sidebar-foreground">Offline POS</h2>
+                <div className="flex items-center gap-1">
+                  {role && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-0">
+                      {role}
+                    </Badge>
+                  )}
+                  {/* Subscription Badge */}
+                  {isDeveloper ? (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 dark:text-amber-400 border-0">
+                      DEV
+                    </Badge>
+                  ) : plan !== 'free' && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-0">
+                      {plan === 'business' ? 'ADMIN' : 'PRO'}
+                    </Badge>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-sm text-sidebar-foreground">Offline POS</h2>
-              {role && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-0">
-                  {role}
-                </Badge>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsOpen(false)}
-            className="lg:hidden text-sidebar-foreground hover:bg-primary/10"
-          >
-            <X className="w-5 h-5" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsOpen(false)}
+              className="lg:hidden text-sidebar-foreground hover:bg-primary/10"
+            >
+              <X className="w-5 h-5" />
+            </Button>
         </div>
 
         {/* Sync Status */}
@@ -218,21 +276,40 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
           <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wider mb-2 px-3">
             Main Menu
           </p>
-          {mainNavItems.filter(item => item.show).map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/dashboard'}
-              onClick={() => setIsOpen(false)}
-              className={cn(
-                "nav-link",
-                isActive(item.path) && "active"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {mainNavItems.filter(item => item.show).map((item) => {
+            // If locked, show with lock icon and redirect to upgrade
+            if (item.locked && !isDeveloper) {
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => navigate('/upgrade', { state: { requiredPlan: item.requiredPlan } })}
+                  className={cn(
+                    "nav-link w-full opacity-60 hover:opacity-80",
+                  )}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                  <Lock className="w-3 h-3 ml-auto text-muted-foreground" />
+                </button>
+              );
+            }
+            
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === '/dashboard'}
+                onClick={() => setIsOpen(false)}
+                className={cn(
+                  "nav-link",
+                  isActive(item.path) && "active"
+                )}
+              >
+                <item.icon className="w-5 h-5" />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
 
           <Separator className="my-4 bg-sidebar-border" />
 
