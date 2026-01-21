@@ -12,8 +12,22 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Shield, Search, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import { AuditLog } from '@/lib/database';
 import { format } from 'date-fns';
+
+interface AuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userRole: 'admin' | 'staff';
+  action: string;
+  tableName: string;
+  recordId: string;
+  description: string;
+  previousData?: string;
+  newData?: string;
+  mode: string;
+  timestamp: string;
+}
 
 export default function AuditLogsPage() {
   const { isAdmin, getAuditLogs } = useRBAC();
@@ -32,11 +46,11 @@ export default function AuditLogsPage() {
     setIsLoading(false);
   };
 
-  const formatDateTime = (timestamp: number) => {
+  const formatDateTime = (timestamp: string) => {
     return format(new Date(timestamp), 'd/M/yyyy, h:mm:ss a');
   };
 
-  const getActionBadge = (action: AuditLog['action']) => {
+  const getActionBadge = (action: string) => {
     const variants: Record<string, { color: string; label: string }> = {
       create: { color: 'bg-emerald-500/20 text-emerald-500', label: 'Create' },
       update: { color: 'bg-blue-500/20 text-blue-500', label: 'Update' },

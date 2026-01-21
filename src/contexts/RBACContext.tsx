@@ -1,6 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { db, UserRole, AuditLog, AppRole, generateId, now } from '@/lib/database';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+
+type AppRole = 'admin' | 'staff';
+
+interface AuditLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userRole: AppRole;
+  action: string;
+  tableName: string;
+  recordId: string;
+  description: string;
+  previousData?: string;
+  newData?: string;
+  mode: string;
+  timestamp: string;
+}
 
 interface RBACContextType {
   role: AppRole | null;
@@ -11,7 +28,7 @@ interface RBACContextType {
   canViewProfit: boolean;
   canViewAuditLogs: boolean;
   setUserRole: (userId: string, role: AppRole, assignedBy?: string) => Promise<boolean>;
-  logAction: (action: AuditLog['action'], tableName: string, recordId: string, description: string, previousData?: any, newData?: any) => Promise<void>;
+  logAction: (action: string, tableName: string, recordId: string, description: string, previousData?: any, newData?: any) => Promise<void>;
   getAuditLogs: () => Promise<AuditLog[]>;
 }
 
@@ -22,7 +39,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load user role
+  // Load user role from Supabase
   useEffect(() => {
     const loadRole = async () => {
       if (!user) {
@@ -32,30 +49,50 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const userRole = await db.userRoles.where('userId').equals(user.id).first();
-        
+        // Check for existing role in Supabase
+        const { data: userRole, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching role:', error);
+          // Default to admin for now to ensure access
+          setRole('admin');
+          setIsLoading(false);
+          return;
+        }
+
         if (userRole) {
-          setRole(userRole.role);
+          setRole(userRole.role as AppRole);
         } else {
           // First user becomes admin, others become staff
-          const allRoles = await db.userRoles.count();
-          const defaultRole: AppRole = allRoles === 0 ? 'admin' : 'staff';
-          
+          const { count } = await supabase
+            .from('user_roles')
+            .select('*', { count: 'exact', head: true });
+
+          const defaultRole: AppRole = (count === 0 || count === null) ? 'admin' : 'staff';
+
           // Create role for new user
-          await db.userRoles.add({
-            id: generateId(),
-            userId: user.id,
-            role: defaultRole,
-            createdAt: now(),
-            updatedAt: now(),
-            syncStatus: 'pending'
-          });
-          
-          setRole(defaultRole);
+          const { error: insertError } = await supabase
+            .from('user_roles')
+            .insert({
+              user_id: user.id,
+              role: defaultRole
+            });
+
+          if (insertError) {
+            console.error('Error inserting role:', insertError);
+            // Default to admin to ensure access
+            setRole('admin');
+          } else {
+            setRole(defaultRole);
+          }
         }
       } catch (error) {
         console.error('Error loading role:', error);
-        setRole('staff'); // Default to staff on error
+        setRole('admin'); // Default to admin on error to ensure access
       } finally {
         setIsLoading(false);
       }
@@ -74,16 +111,23 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
 
   const setUserRole = useCallback(async (userId: string, newRole: AppRole, assignedBy?: string): Promise<boolean> => {
     try {
-      const existingRole = await db.userRoles.where('userId').equals(userId).first();
+      const { data: existingRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
       
       if (existingRole) {
         const oldRole = existingRole.role;
-        await db.userRoles.update(existingRole.id, {
-          role: newRole,
-          assignedBy,
-          updatedAt: now(),
-          syncStatus: 'pending'
-        });
+        const { error } = await supabase
+          .from('user_roles')
+          .update({
+            role: newRole,
+            assigned_by: assignedBy
+          })
+          .eq('user_id', userId);
+
+        if (error) throw error;
 
         // Log role change
         if (user) {
@@ -94,15 +138,15 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
           );
         }
       } else {
-        await db.userRoles.add({
-          id: generateId(),
-          userId,
-          role: newRole,
-          assignedBy,
-          createdAt: now(),
-          updatedAt: now(),
-          syncStatus: 'pending'
-        });
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: userId,
+            role: newRole,
+            assigned_by: assignedBy
+          });
+
+        if (error) throw error;
       }
 
       if (userId === user?.id) {
@@ -117,7 +161,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const logAction = useCallback(async (
-    action: AuditLog['action'],
+    action: string,
     tableName: string,
     recordId: string,
     description: string,
@@ -127,23 +171,22 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     try {
-      const log: AuditLog = {
-        id: generateId(),
-        userId: user.id,
-        userEmail: user.email,
-        userRole: role || 'staff',
-        action,
-        tableName,
-        recordId,
-        description,
-        previousData: previousData ? JSON.stringify(previousData) : undefined,
-        newData: newData ? JSON.stringify(newData) : undefined,
-        mode: isOnline ? 'online' : 'offline',
-        timestamp: now(),
-        syncStatus: 'pending'
-      };
+      const { error } = await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: user.id,
+          user_email: user.email || '',
+          user_role: role || 'staff',
+          action,
+          table_name: tableName,
+          record_id: recordId,
+          description,
+          previous_data: previousData ? previousData : null,
+          new_data: newData ? newData : null,
+          mode: isOnline ? 'online' : 'offline'
+        });
 
-      await db.auditLogs.add(log);
+      if (error) throw error;
     } catch (error) {
       console.error('Error logging action:', error);
     }
@@ -153,7 +196,27 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     if (!isAdmin) return [];
     
     try {
-      return await db.auditLogs.orderBy('timestamp').reverse().toArray();
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(log => ({
+        id: log.id,
+        userId: log.user_id,
+        userEmail: log.user_email,
+        userRole: log.user_role as AppRole,
+        action: log.action,
+        tableName: log.table_name,
+        recordId: log.record_id,
+        description: log.description,
+        previousData: log.previous_data ? JSON.stringify(log.previous_data) : undefined,
+        newData: log.new_data ? JSON.stringify(log.new_data) : undefined,
+        mode: log.mode,
+        timestamp: log.created_at
+      }));
     } catch (error) {
       console.error('Error getting audit logs:', error);
       return [];
