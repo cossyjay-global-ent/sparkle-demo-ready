@@ -347,6 +347,42 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          paystack_customer_id: string | null
+          paystack_subscription_id: string | null
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          paystack_customer_id?: string | null
+          paystack_subscription_id?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          paystack_customer_id?: string | null
+          paystack_subscription_id?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_by: string | null
@@ -379,9 +415,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_subscription_plan: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
       get_user_plan: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
+      has_minimum_plan: {
+        Args: {
+          _required_plan: Database["public"]["Enums"]["subscription_plan"]
+          _user_id: string
+        }
+        Returns: boolean
       }
       has_role: {
         Args: {
@@ -394,6 +441,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "staff"
       subscription_plan: "free" | "pro" | "business"
+      subscription_status: "active" | "inactive" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -523,6 +571,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "staff"],
       subscription_plan: ["free", "pro", "business"],
+      subscription_status: ["active", "inactive", "cancelled"],
     },
   },
 } as const
