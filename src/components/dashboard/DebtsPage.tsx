@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
@@ -25,14 +25,46 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, Eye, CreditCard, Edit2, Trash2, Phone, ArrowLeft, X } from 'lucide-react';
-import { Debt, DebtItem, DebtPayment, Customer, generateId } from '@/lib/database';
+import { Tables, Json } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { v4 as generateId } from 'uuid';
+
+type Debt = Tables<'debts'>;
+type DebtPayment = Tables<'debt_payments'>;
+type Customer = Tables<'customers'>;
+
+interface DebtItem {
+  id: string;
+  itemName: string;
+  quantity: number;
+  price: number;
+  total: number;
+  date: number;
+}
 
 type ViewMode = 'list' | 'add' | 'view' | 'edit' | 'payment';
 
+// Helper function to parse items from Json
+const parseDebtItems = (items: Json): DebtItem[] => {
+  if (!items || !Array.isArray(items)) return [];
+  return items.map((item: any) => ({
+    id: item.id || generateId(),
+    itemName: item.itemName || '',
+    quantity: item.quantity || 1,
+    price: item.price || 0,
+    total: item.total || 0,
+    date: item.date || Date.now()
+  }));
+};
+
+// Helper to convert DebtItem[] to Json
+const itemsToJson = (items: DebtItem[]): Json => {
+  return items as unknown as Json;
+};
+
 export default function DebtsPage() {
-  const { getDebts, addDebt, updateDebt, deleteDebt, getDebtPayments, addDebtPayment, getCustomers, addCustomer } = useData();
+  const { getDebts, addDebt, updateDebt, deleteDebt, getDebtPayments, addDebtPayment, getCustomers, addCustomer } = useCloudData();
   const { canDeleteDebt } = useRBAC();
   const { currency } = useCurrency();
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -72,7 +104,7 @@ export default function DebtsPage() {
 
   const loadData = async () => {
     const [debtsData, customersData] = await Promise.all([getDebts(), getCustomers()]);
-    setDebts(debtsData.sort((a, b) => b.createdAt - a.createdAt));
+    setDebts(debtsData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     setCustomers(customersData);
   };
 
@@ -80,21 +112,23 @@ export default function DebtsPage() {
     return `${currency.symbol}${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const formatDate = (timestamp: number) => {
-    return format(new Date(timestamp), 'd/M/yyyy');
+  const formatDate = (dateValue: string | number) => {
+    const date = typeof dateValue === 'number' ? new Date(dateValue) : new Date(dateValue);
+    return format(date, 'd/M/yyyy');
   };
 
-  const formatDateTime = (timestamp: number) => {
-    return format(new Date(timestamp), 'd/M/yyyy, h:mm:ss a');
+  const formatDateTime = (dateValue: string | number) => {
+    const date = typeof dateValue === 'number' ? new Date(dateValue) : new Date(dateValue);
+    return format(date, 'd/M/yyyy, h:mm:ss a');
   };
 
   const getStatus = (debt: Debt) => {
-    const balance = debt.totalAmount - debt.paidAmount;
+    const balance = debt.total_amount - debt.paid_amount;
     return balance <= 0 ? 'PAID' : 'UNPAID';
   };
 
   const getBalance = (debt: Debt) => {
-    return Math.max(0, debt.totalAmount - debt.paidAmount);
+    return Math.max(0, debt.total_amount - debt.paid_amount);
   };
 
   // New Debt handlers
@@ -166,18 +200,18 @@ export default function DebtsPage() {
     }
 
     const totalAmount = validItems.reduce((sum, item) => sum + item.total, 0);
-    const dateTimestamp = new Date(newDebtForm.date).getTime();
+    const dateIso = new Date(newDebtForm.date).toISOString();
 
     const debt = await addDebt({
-      customerId: customerId || generateId(),
-      customerName: newDebtForm.customerName,
-      customerPhone: newDebtForm.customerPhone,
+      customer_id: customerId || undefined,
+      customer_name: newDebtForm.customerName,
+      customer_phone: newDebtForm.customerPhone || null,
       description: validItems.map(i => i.itemName).join(', '),
-      items: validItems.map(i => ({ ...i, date: dateTimestamp })),
-      totalAmount,
-      paidAmount: 0,
+      items: itemsToJson(validItems.map(i => ({ ...i, date: new Date(newDebtForm.date).getTime() }))),
+      total_amount: totalAmount,
+      paid_amount: 0,
       status: 'pending',
-      date: dateTimestamp
+      date: dateIso
     });
 
     if (debt) {
@@ -203,19 +237,20 @@ export default function DebtsPage() {
   const handleViewDebt = async (debt: Debt) => {
     setSelectedDebt(debt);
     const paymentsData = await getDebtPayments(debt.id);
-    setPayments(paymentsData.sort((a, b) => a.createdAt - b.createdAt));
+    setPayments(paymentsData.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
     setViewMode('view');
   };
 
   // Edit handlers
   const handleEditDebt = (debt: Debt) => {
     setSelectedDebt(debt);
+    const parsedItems = parseDebtItems(debt.items);
     setEditForm({
-      customerName: debt.customerName,
-      customerPhone: debt.customerPhone || '',
+      customerName: debt.customer_name,
+      customerPhone: debt.customer_phone || '',
       date: format(new Date(debt.date), 'yyyy-MM-dd'),
       currentBalance: getBalance(debt),
-      items: debt.items && debt.items.length > 0 ? [...debt.items] : [{ id: generateId(), itemName: '', quantity: 1, price: 0, total: 0, date: Date.now() }]
+      items: parsedItems.length > 0 ? parsedItems : [{ id: generateId(), itemName: '', quantity: 1, price: 0, total: 0, date: Date.now() }]
     });
     setViewMode('edit');
   };
@@ -252,8 +287,8 @@ export default function DebtsPage() {
     if (!selectedDebt) return;
     
     const success = await updateDebt(selectedDebt.id, {
-      customerName: editForm.customerName,
-      customerPhone: editForm.customerPhone || undefined
+      customer_name: editForm.customerName,
+      customer_phone: editForm.customerPhone || null
     });
 
     if (success) {
@@ -267,15 +302,15 @@ export default function DebtsPage() {
     
     const validItems = editForm.items.filter(i => i.itemName.trim());
     const newItemsTotal = validItems.reduce((sum, item) => sum + item.total, 0);
-    const newTotalAmount = selectedDebt.paidAmount + newItemsTotal + editForm.currentBalance;
+    const newTotalAmount = selectedDebt.paid_amount + newItemsTotal + editForm.currentBalance;
 
     const success = await updateDebt(selectedDebt.id, {
-      customerName: editForm.customerName,
-      customerPhone: editForm.customerPhone || undefined,
-      items: validItems,
-      totalAmount: newTotalAmount,
+      customer_name: editForm.customerName,
+      customer_phone: editForm.customerPhone || null,
+      items: itemsToJson(validItems),
+      total_amount: newTotalAmount,
       description: validItems.map(i => i.itemName).join(', '),
-      status: newTotalAmount <= selectedDebt.paidAmount ? 'paid' : selectedDebt.paidAmount > 0 ? 'partial' : 'pending'
+      status: newTotalAmount <= selectedDebt.paid_amount ? 'paid' : selectedDebt.paid_amount > 0 ? 'partial' : 'pending'
     });
 
     if (success) {
@@ -310,9 +345,9 @@ export default function DebtsPage() {
 
     setIsLoading(true);
     const payment = await addDebtPayment({
-      debtId: selectedDebt.id,
+      debt_id: selectedDebt.id,
       amount: amount,
-      date: Date.now(),
+      date: new Date().toISOString(),
       description: paymentDescription.trim() || 'Payment Received'
     });
 
@@ -348,8 +383,8 @@ export default function DebtsPage() {
   };
 
   // Calculate totals
-  const totalDebt = debts.reduce((sum, d) => sum + d.totalAmount, 0);
-  const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
+  const totalDebt = debts.reduce((sum, d) => sum + d.total_amount, 0);
+  const totalPaid = debts.reduce((sum, d) => sum + d.paid_amount, 0);
   const totalOutstanding = debts.reduce((sum, d) => sum + getBalance(d), 0);
 
   // Render customer list view
@@ -374,11 +409,11 @@ export default function DebtsPage() {
         </Card>
         <Card className="stat-card">
           <p className="text-sm text-muted-foreground">Total Paid</p>
-          <p className="text-2xl font-bold text-emerald-500">{formatCurrency(totalPaid)}</p>
+          <p className="text-2xl font-bold text-success">{formatCurrency(totalPaid)}</p>
         </Card>
         <Card className="stat-card">
           <p className="text-sm text-muted-foreground">Outstanding</p>
-          <p className="text-2xl font-bold text-orange-500">{formatCurrency(totalOutstanding)}</p>
+          <p className="text-2xl font-bold text-warning">{formatCurrency(totalOutstanding)}</p>
         </Card>
       </div>
 
@@ -397,11 +432,11 @@ export default function DebtsPage() {
               <Card key={debt.id} className="p-4 space-y-3">
                 {/* Header: Name and Status */}
                 <div className="flex justify-between items-start">
-                  <h3 className="font-semibold text-foreground text-lg">{debt.customerName}</h3>
+                  <h3 className="font-semibold text-foreground text-lg">{debt.customer_name}</h3>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                     status === 'PAID' 
-                      ? 'bg-emerald-500/20 text-emerald-500' 
-                      : 'bg-red-500/20 text-red-500'
+                      ? 'bg-success/20 text-success' 
+                      : 'bg-destructive/20 text-destructive'
                   }`}>
                     {status}
                   </span>
@@ -409,10 +444,10 @@ export default function DebtsPage() {
 
                 {/* Phone and Date */}
                 <div className="text-sm text-muted-foreground space-y-1">
-                  {debt.customerPhone && (
+                  {debt.customer_phone && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-4 h-4" />
-                      <span>{debt.customerPhone}</span>
+                      <span>{debt.customer_phone}</span>
                     </div>
                   )}
                   <div>{formatDate(debt.date)}</div>
@@ -422,7 +457,7 @@ export default function DebtsPage() {
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
                   <div>
                     <p className="text-sm text-muted-foreground">Total:</p>
-                    <p className="font-bold text-foreground">{formatCurrency(debt.totalAmount)}</p>
+                    <p className="font-bold text-foreground">{formatCurrency(debt.total_amount)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Balance:</p>
@@ -504,79 +539,64 @@ export default function DebtsPage() {
       </Card>
 
       <Card className="p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-foreground">Items</h2>
-          <Button variant="outline" size="sm" onClick={handleAddItem}>
-            <Plus className="w-4 h-4 mr-1" />
-            Add Item
-          </Button>
-        </div>
-
+        <h2 className="text-lg font-semibold text-foreground">Items</h2>
+        
         {newDebtForm.items.map((item, index) => (
-          <div key={item.id} className="p-4 border border-border rounded-lg space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Item {index + 1}</span>
-              {newDebtForm.items.length > 1 && (
-                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Item Name</Label>
+          <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
+            <div className="col-span-4">
+              <Label className="text-xs">Item Name</Label>
               <Input
                 value={item.itemName}
                 onChange={(e) => handleItemChange(item.id, 'itemName', e.target.value)}
-                placeholder="Item name"
+                placeholder="Item"
                 className="input-styled"
               />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={item.quantity}
-                  onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
-                  className="input-styled"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Price</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={item.price}
-                  onChange={(e) => handleItemChange(item.id, 'price', Number(e.target.value))}
-                  className="input-styled"
-                />
-              </div>
+            <div className="col-span-2">
+              <Label className="text-xs">Qty</Label>
+              <Input
+                type="number"
+                min="1"
+                value={item.quantity}
+                onChange={(e) => handleItemChange(item.id, 'quantity', Number(e.target.value))}
+                className="input-styled"
+              />
             </div>
-
-            <div className="text-right">
-              <span className="text-sm text-muted-foreground">Total: </span>
-              <span className="font-bold text-foreground">{formatCurrency(item.total)}</span>
+            <div className="col-span-3">
+              <Label className="text-xs">Price</Label>
+              <Input
+                type="number"
+                min="0"
+                value={item.price || ''}
+                onChange={(e) => handleItemChange(item.id, 'price', Number(e.target.value))}
+                className="input-styled"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">Total</Label>
+              <p className="font-semibold py-2">{formatCurrency(item.total)}</p>
+            </div>
+            <div className="col-span-1">
+              {newDebtForm.items.length > 1 && (
+                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(item.id)}>
+                  <X className="w-4 h-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         ))}
-
-        <div className="pt-4 border-t border-border text-right">
-          <span className="text-lg text-muted-foreground">Grand Total: </span>
-          <span className="text-xl font-bold text-foreground">
-            {formatCurrency(newDebtForm.items.reduce((sum, i) => sum + i.total, 0))}
-          </span>
-        </div>
+        
+        <Button variant="outline" onClick={handleAddItem} className="w-full">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Item
+        </Button>
       </Card>
 
-      <div className="flex gap-4">
-        <Button variant="outline" className="flex-1" onClick={() => { setViewMode('list'); resetNewDebtForm(); }}>
-          Cancel
-        </Button>
-        <Button className="flex-1 btn-primary-gradient" onClick={handleCreateDebt} disabled={isLoading}>
+      <div className="flex justify-between items-center">
+        <p className="text-lg font-bold">
+          Grand Total: {formatCurrency(newDebtForm.items.reduce((sum, i) => sum + i.total, 0))}
+        </p>
+        <Button onClick={handleCreateDebt} disabled={isLoading} className="btn-primary-gradient">
           Create Bundle
         </Button>
       </div>
@@ -589,12 +609,13 @@ export default function DebtsPage() {
     
     const status = getStatus(selectedDebt);
     const balance = getBalance(selectedDebt);
+    const debtItems = parseDebtItems(selectedDebt.items);
 
     // Build payment history
     const paymentHistory = [
-      { date: selectedDebt.createdAt, description: 'Initial Balance', amount: selectedDebt.totalAmount, isPayment: false },
-      ...payments.map(p => ({ date: p.createdAt, description: p.description || 'Payment Received', amount: p.amount, isPayment: true })),
-      { date: Date.now(), description: 'Current Balance', amount: balance, isPayment: false }
+      { date: selectedDebt.created_at, description: 'Initial Balance', amount: selectedDebt.total_amount, isPayment: false },
+      ...payments.map(p => ({ date: p.created_at, description: p.description || 'Payment Received', amount: p.amount, isPayment: true })),
+      { date: new Date().toISOString(), description: 'Current Balance', amount: balance, isPayment: false }
     ];
 
     return (
@@ -615,15 +636,15 @@ export default function DebtsPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Phone:</p>
-              <p className="font-medium text-foreground">{selectedDebt.customerPhone || '-'}</p>
+              <p className="font-medium text-foreground">{selectedDebt.customer_phone || '-'}</p>
             </div>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Status:</p>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${
               status === 'PAID' 
-                ? 'bg-emerald-500/20 text-emerald-500' 
-                : 'bg-red-500/20 text-red-500'
+                ? 'bg-success/20 text-success' 
+                : 'bg-destructive/20 text-destructive'
             }`}>
               {status === 'PAID' ? 'Paid' : 'Unpaid'}
             </span>
@@ -645,8 +666,8 @@ export default function DebtsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {selectedDebt.items && selectedDebt.items.length > 0 ? (
-                  selectedDebt.items.map(item => (
+                {debtItems.length > 0 ? (
+                  debtItems.map(item => (
                     <TableRow key={item.id}>
                       <TableCell>{formatDate(item.date)}</TableCell>
                       <TableCell>{item.itemName}</TableCell>
@@ -671,7 +692,7 @@ export default function DebtsPage() {
         <Card className="p-4 space-y-2">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Grand Total:</span>
-            <span className="font-bold text-foreground">{formatCurrency(selectedDebt.totalAmount)}</span>
+            <span className="font-bold text-foreground">{formatCurrency(selectedDebt.total_amount)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Current Balance:</span>
@@ -692,12 +713,12 @@ export default function DebtsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paymentHistory.map((entry, index) => (
-                  <TableRow key={index}>
+                {paymentHistory.map((entry, idx) => (
+                  <TableRow key={idx}>
                     <TableCell>{formatDateTime(entry.date)}</TableCell>
                     <TableCell>{entry.description}</TableCell>
-                    <TableCell className={`text-right ${entry.isPayment ? 'text-emerald-500' : ''}`}>
-                      {entry.isPayment ? `-${formatCurrency(entry.amount)}` : formatCurrency(entry.amount)}
+                    <TableCell className={`text-right ${entry.isPayment ? 'text-success' : ''}`}>
+                      {entry.isPayment ? '-' : ''}{formatCurrency(entry.amount)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -706,9 +727,17 @@ export default function DebtsPage() {
           </div>
         </Card>
 
-        <Button className="w-full" variant="outline" onClick={() => setViewMode('list')}>
-          Back to List
-        </Button>
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => handleEditDebt(selectedDebt)}>
+            <Edit2 className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+          <Button onClick={() => handlePaymentClick(selectedDebt)} className="btn-primary-gradient">
+            <CreditCard className="w-4 h-4 mr-2" />
+            Record Payment
+          </Button>
+        </div>
       </div>
     );
   };
@@ -726,36 +755,16 @@ export default function DebtsPage() {
           <h1 className="text-2xl font-bold text-foreground">Add to Existing Debt</h1>
         </div>
 
-        {/* Customer Information Section */}
+        {/* Customer Info Section */}
         <Card className="p-4 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">Customer Information</h2>
           
-          <div className="space-y-2">
-            <Label>Date & Time</Label>
-            <Input
-              type="date"
-              value={editForm.date}
-              onChange={(e) => setEditForm(prev => ({ ...prev, date: e.target.value }))}
-              className="input-styled"
-            />
-          </div>
-
           <div className="space-y-2">
             <Label>Customer Name</Label>
             <Input
               value={editForm.customerName}
               onChange={(e) => setEditForm(prev => ({ ...prev, customerName: e.target.value }))}
-              placeholder="Customer name"
               className="input-styled"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Current Balance (Before Adding New Items)</Label>
-            <Input
-              value={formatCurrency(editForm.currentBalance)}
-              disabled
-              className="input-styled bg-muted"
             />
           </div>
 
@@ -764,97 +773,102 @@ export default function DebtsPage() {
             <Input
               value={editForm.customerPhone}
               onChange={(e) => setEditForm(prev => ({ ...prev, customerPhone: e.target.value }))}
-              placeholder="Phone number"
               className="input-styled"
             />
           </div>
 
-          <Button variant="outline" onClick={handleSaveCustomerInfo}>
-            Save Changes
+          <Button variant="secondary" onClick={handleSaveCustomerInfo} className="w-full">
+            Save Customer Info
           </Button>
         </Card>
 
-        {/* Items Section */}
-        <Card className="p-4 space-y-4">
+        {/* Current Balance */}
+        <Card className="p-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-foreground">Items</h2>
-            <Button variant="outline" size="sm" onClick={handleAddEditItem}>
-              <Plus className="w-4 h-4 mr-1" />
-              Add Item
-            </Button>
+            <span className="text-muted-foreground">Current Balance:</span>
+            <span className="text-xl font-bold text-foreground">{formatCurrency(editForm.currentBalance)}</span>
           </div>
+        </Card>
 
-          {editForm.items.map((item, index) => (
-            <div key={item.id} className="p-4 border border-border rounded-lg space-y-3">
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input
-                  value={formatDate(item.date)}
-                  disabled
-                  className="input-styled bg-muted"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Item Name</Label>
+        {/* Add Items Section */}
+        <Card className="p-4 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground">Add New Items</h2>
+          
+          {editForm.items.map((item) => (
+            <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-4">
+                <Label className="text-xs">Item Name</Label>
                 <Input
                   value={item.itemName}
                   onChange={(e) => handleEditItemChange(item.id, 'itemName', e.target.value)}
-                  placeholder="Item name"
+                  placeholder="Item"
                   className="input-styled"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Quantity</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) => handleEditItemChange(item.id, 'quantity', Number(e.target.value))}
-                    className="input-styled"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Price</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.price}
-                    onChange={(e) => handleEditItemChange(item.id, 'price', Number(e.target.value))}
-                    className="input-styled"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Total</Label>
+              <div className="col-span-2">
+                <Label className="text-xs">Qty</Label>
                 <Input
-                  value={formatCurrency(item.total)}
-                  disabled
-                  className="input-styled bg-muted"
+                  type="number"
+                  min="1"
+                  value={item.quantity}
+                  onChange={(e) => handleEditItemChange(item.id, 'quantity', Number(e.target.value))}
+                  className="input-styled"
                 />
+              </div>
+              <div className="col-span-3">
+                <Label className="text-xs">Price</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={item.price || ''}
+                  onChange={(e) => handleEditItemChange(item.id, 'price', Number(e.target.value))}
+                  className="input-styled"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-xs">Total</Label>
+                <p className="font-semibold py-2">{formatCurrency(item.total)}</p>
+              </div>
+              <div className="col-span-1">
+                {editForm.items.length > 1 && (
+                  <Button variant="ghost" size="icon" onClick={() => setEditForm(prev => ({ ...prev, items: prev.items.filter(i => i.id !== item.id) }))}>
+                    <X className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}
+          
+          <Button variant="outline" onClick={handleAddEditItem} className="w-full">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Item
+          </Button>
         </Card>
 
-        {/* Action Buttons */}
-        <div className="flex gap-4">
-          <Button variant="outline" className="flex-1" onClick={() => setViewMode('list')}>
-            Cancel
-          </Button>
-          <Button className="flex-1 btn-primary-gradient" onClick={handleUpdateBundle} disabled={isLoading}>
-            Update Bundle
-          </Button>
-        </div>
+        {/* Total Summary */}
+        <Card className="p-4 space-y-2">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Current Balance:</span>
+            <span className="font-medium">{formatCurrency(editForm.currentBalance)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">New Items Total:</span>
+            <span className="font-medium">{formatCurrency(editForm.items.reduce((sum, i) => sum + i.total, 0))}</span>
+          </div>
+          <div className="flex justify-between border-t pt-2">
+            <span className="font-semibold">New Total:</span>
+            <span className="font-bold text-lg">{formatCurrency(editForm.currentBalance + editForm.items.reduce((sum, i) => sum + i.total, 0))}</span>
+          </div>
+        </Card>
+
+        <Button onClick={handleUpdateBundle} disabled={isLoading} className="w-full btn-primary-gradient">
+          Update Bundle
+        </Button>
       </div>
     );
   };
 
-  // Render Payment dialog/screen
+  // Render Payment screen
   const renderPaymentScreen = () => {
     if (!selectedDebt) return null;
     const balance = getBalance(selectedDebt);
@@ -870,85 +884,72 @@ export default function DebtsPage() {
 
         <Card className="p-4 space-y-4">
           <div>
-            <p className="text-sm text-muted-foreground">Customer</p>
-            <p className="font-semibold text-foreground">{selectedDebt.customerName}</p>
+            <p className="text-sm text-muted-foreground">Customer:</p>
+            <p className="font-semibold text-foreground">{selectedDebt.customer_name}</p>
           </div>
-
           <div>
-            <p className="text-sm text-muted-foreground">Outstanding Balance</p>
-            <p className="text-2xl font-bold text-orange-500">{formatCurrency(balance)}</p>
+            <p className="text-sm text-muted-foreground">Outstanding Balance:</p>
+            <p className="text-2xl font-bold text-warning">{formatCurrency(balance)}</p>
           </div>
+        </Card>
 
+        <Card className="p-4 space-y-4">
           <div className="space-y-2">
             <Label>Payment Amount *</Label>
             <Input
               type="number"
               min="0"
-              step="0.01"
               max={balance}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               placeholder="Enter amount"
               className="input-styled"
             />
-            {Number(paymentAmount) > balance && (
-              <p className="text-sm text-destructive">Payment cannot exceed balance</p>
-            )}
           </div>
 
           <div className="space-y-2">
-            <Label>Description</Label>
+            <Label>Description (optional)</Label>
             <Input
               value={paymentDescription}
               onChange={(e) => setPaymentDescription(e.target.value)}
-              placeholder="Payment description (optional)"
+              placeholder="e.g., Cash payment"
               className="input-styled"
             />
           </div>
-        </Card>
 
-        <div className="flex gap-4">
-          <Button variant="outline" className="flex-1" onClick={() => setViewMode('list')}>
-            Cancel
+          <Button onClick={handleSubmitPayment} disabled={isLoading} className="w-full btn-primary-gradient">
+            Record Payment
           </Button>
-          <Button className="flex-1 btn-primary-gradient" onClick={handleSubmitPayment} disabled={isLoading}>
-            Submit Payment
-          </Button>
-        </div>
+        </Card>
       </div>
     );
   };
 
-  // Main render with delete confirmation dialog
   return (
     <>
+      {viewMode === 'list' && renderListView()}
+      {viewMode === 'add' && renderAddView()}
+      {viewMode === 'view' && renderViewScreen()}
+      {viewMode === 'edit' && renderEditScreen()}
+      {viewMode === 'payment' && renderPaymentScreen()}
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogTitle>Delete Bundle?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this debt? This action cannot be undone.
+              This action cannot be undone. This will permanently delete the debt record and all associated payments.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Main Content */}
-      {viewMode === 'add' && renderAddView()}
-      {viewMode === 'view' && renderViewScreen()}
-      {viewMode === 'edit' && renderEditScreen()}
-      {viewMode === 'payment' && renderPaymentScreen()}
-      {viewMode === 'list' && renderListView()}
     </>
   );
 }

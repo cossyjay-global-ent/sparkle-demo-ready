@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
 import { Card } from '@/components/ui/card';
@@ -24,11 +24,15 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
-import { Sale, Expense, Debt } from '@/lib/database';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
+import { Tables } from '@/integrations/supabase/types';
+
+type Sale = Tables<'sales'>;
+type Expense = Tables<'expenses'>;
+type Debt = Tables<'debts'>;
 
 export default function ReportsPage() {
-  const { getSales, getExpenses, getDebts } = useData();
+  const { getSales, getExpenses, getDebts } = useCloudData();
   const { currency } = useCurrency();
   const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const [allSales, setAllSales] = useState<Sale[]>([]);
@@ -90,26 +94,35 @@ export default function ReportsPage() {
 
   // Filter data by selected date range
   const sales = useMemo(() => {
-    return allSales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
+    return allSales.filter(s => {
+      const saleDate = new Date(s.date).getTime();
+      return saleDate >= fromTimestamp && saleDate <= toTimestamp;
+    });
   }, [allSales, fromTimestamp, toTimestamp]);
 
   const expenses = useMemo(() => {
-    return allExpenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
+    return allExpenses.filter(e => {
+      const expenseDate = new Date(e.date).getTime();
+      return expenseDate >= fromTimestamp && expenseDate <= toTimestamp;
+    });
   }, [allExpenses, fromTimestamp, toTimestamp]);
 
   const debts = useMemo(() => {
-    return allDebts.filter(d => d.date >= fromTimestamp && d.date <= toTimestamp);
+    return allDebts.filter(d => {
+      const debtDate = new Date(d.date).getTime();
+      return debtDate >= fromTimestamp && debtDate <= toTimestamp;
+    });
   }, [allDebts, fromTimestamp, toTimestamp]);
 
   // Calculate totals
-  const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const totalSales = sales.reduce((sum, s) => sum + s.total_amount, 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalDebts = debts.reduce((sum, d) => sum + d.totalAmount, 0);
-  const totalPaid = debts.reduce((sum, d) => sum + d.paidAmount, 0);
+  const totalDebts = debts.reduce((sum, d) => sum + d.total_amount, 0);
+  const totalPaid = debts.reduce((sum, d) => sum + d.paid_amount, 0);
   const totalOutstanding = totalDebts - totalPaid;
 
   // Group by date/week/month
-  const groupData = (data: { date: number; amount?: number; totalAmount?: number }[], key: 'daily' | 'weekly' | 'monthly') => {
+  const groupData = (data: { date: string; amount?: number; total_amount?: number }[], key: 'daily' | 'weekly' | 'monthly') => {
     const grouped: Record<string, { sales: number; expenses: number }> = {};
     
     data.forEach(item => {
@@ -130,18 +143,18 @@ export default function ReportsPage() {
         grouped[groupKey] = { sales: 0, expenses: 0 };
       }
 
-      if ('totalAmount' in item) {
-        grouped[groupKey].sales += item.totalAmount || 0;
-      } else if ('amount' in item) {
-        grouped[groupKey].expenses += item.amount || 0;
+      if ('total_amount' in item && item.total_amount !== undefined) {
+        grouped[groupKey].sales += item.total_amount;
+      } else if ('amount' in item && item.amount !== undefined) {
+        grouped[groupKey].expenses += item.amount;
       }
     });
 
     return grouped;
   };
 
-  const salesByPeriod = groupData(sales, viewMode);
-  const expensesByPeriod = groupData(expenses, viewMode);
+  const salesByPeriod = groupData(sales as any, viewMode);
+  const expensesByPeriod = groupData(expenses as any, viewMode);
 
   // Merge sales and expenses data
   const mergedData: Record<string, { sales: number; expenses: number }> = {};

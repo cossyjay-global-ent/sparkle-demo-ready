@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDateFilter } from '@/contexts/DateFilterContext';
@@ -33,13 +33,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Lock, TrendingUp, Eye, EyeOff, Calendar, RefreshCw } from 'lucide-react';
-import { Sale, Expense } from '@/lib/database';
+import { Tables } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 
+type Sale = Tables<'sales'>;
+type Expense = Tables<'expenses'>;
+
 export default function ProfitPage() {
   const { hasProfitPassword, setProfitPassword, verifyProfitPassword, user } = useAuth();
-  const { getSales, getExpenses } = useData();
+  const { getSales, getExpenses } = useCloudData();
   const { currency } = useCurrency();
   const { dateRange, isDaily, resetToDaily, syncStatus, canSelectDateRange } = useDateFilter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -230,7 +233,7 @@ export default function ProfitPage() {
       getExpenses()
     ]);
     if (stateRef.current.mounted) {
-      setAllSales(salesData.sort((a, b) => b.date - a.date));
+      setAllSales(salesData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setAllExpenses(expensesData);
     }
   }, [getSales, getExpenses]);
@@ -277,13 +280,19 @@ export default function ProfitPage() {
   const fromTimestamp = dateRange.fromDate.getTime();
   const toTimestamp = dateRange.toDate.getTime();
 
-  const filteredSales = allSales.filter(s => s.date >= fromTimestamp && s.date <= toTimestamp);
-  const filteredExpenses = allExpenses.filter(e => e.date >= fromTimestamp && e.date <= toTimestamp);
+  const filteredSales = allSales.filter(s => {
+    const saleDate = new Date(s.date).getTime();
+    return saleDate >= fromTimestamp && saleDate <= toTimestamp;
+  });
+  const filteredExpenses = allExpenses.filter(e => {
+    const expenseDate = new Date(e.date).getTime();
+    return expenseDate >= fromTimestamp && expenseDate <= toTimestamp;
+  });
 
   // 🔒 NON-NEGOTIABLE: Profit = Sales - Expenses
   const totalProfit = filteredSales.reduce((sum, s) => sum + s.profit, 0);
-  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const netProfit = totalProfit - totalExpenses;
+  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const netProfit = totalProfit - totalExpensesAmount;
 
   // Calculate by period (for quick reference cards - ALWAYS based on actual dates)
   const today = new Date();
@@ -297,12 +306,16 @@ export default function ProfitPage() {
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
 
   // Quick reference values (always show today/week/month regardless of filter)
-  const todayProfit = allSales.filter(s => s.date >= todayStart && s.date <= todayEndTimestamp).reduce((sum, s) => sum + s.profit, 0);
-  const weekProfit = allSales.filter(s => s.date >= weekStart).reduce((sum, s) => sum + s.profit, 0);
-  const monthProfit = allSales.filter(s => s.date >= monthStart).reduce((sum, s) => sum + s.profit, 0);
+  const todayProfit = allSales.filter(s => {
+    const saleDate = new Date(s.date).getTime();
+    return saleDate >= todayStart && saleDate <= todayEndTimestamp;
+  }).reduce((sum, s) => sum + s.profit, 0);
+  const weekProfit = allSales.filter(s => new Date(s.date).getTime() >= weekStart).reduce((sum, s) => sum + s.profit, 0);
+  const monthProfit = allSales.filter(s => new Date(s.date).getTime() >= monthStart).reduce((sum, s) => sum + s.profit, 0);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('en-NG', {
+  const formatDate = (dateValue: string | number) => {
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : new Date(dateValue);
+    return date.toLocaleDateString('en-NG', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
@@ -473,7 +486,7 @@ export default function ProfitPage() {
         </div>
         <Card className="stat-card bg-destructive/10 border-destructive/20">
           <p className="text-sm text-destructive">{dateLabel} Expenses</p>
-          <p className="text-2xl font-bold text-destructive">{currencySymbol}{totalExpenses.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-destructive">{currencySymbol}{totalExpensesAmount.toLocaleString()}</p>
         </Card>
         <Card className={`stat-card ${netProfit >= 0 ? 'bg-success/10 border-success/20' : 'bg-destructive/10 border-destructive/20'}`}>
           <p className={`text-sm ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>{dateLabel} Net</p>
@@ -533,10 +546,10 @@ export default function ProfitPage() {
               ) : (
                 filteredSales.map(sale => (
                   <tr key={sale.id} className="table-row-hover border-t border-border">
-                    <td className="p-4 font-medium">{sale.productName}</td>
+                    <td className="p-4 font-medium">{sale.product_name}</td>
                     <td className="p-4">{sale.quantity}</td>
-                    <td className="p-4">{currencySymbol}{sale.totalAmount.toLocaleString()}</td>
-                    <td className="p-4 text-muted-foreground">{currencySymbol}{(sale.costPrice * sale.quantity).toLocaleString()}</td>
+                    <td className="p-4">{currencySymbol}{sale.total_amount.toLocaleString()}</td>
+                    <td className="p-4 text-muted-foreground">{currencySymbol}{(sale.cost_price * sale.quantity).toLocaleString()}</td>
                     <td className="p-4 text-success font-medium">{currencySymbol}{sale.profit.toLocaleString()}</td>
                     <td className="p-4 text-sm text-muted-foreground">{formatDate(sale.date)}</td>
                   </tr>
