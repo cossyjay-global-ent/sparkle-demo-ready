@@ -10,8 +10,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
-// DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
-const DEVELOPER_EMAIL = 'cossybest24@gmail.com';
+// DEVELOPER LIFETIME ACCESS – DO NOT REMOVE – NON-NEGOTIABLE
+const DEVELOPER_EMAIL = 'support@cosmas.dev';
 
 type AppRole = 'admin' | 'staff';
 

@@ -2,9 +2,9 @@
  * SUBSCRIPTION SYSTEM - PRODUCTION READY
  * Handles subscription state, plan gating, and real-time sync.
  * 
- * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
- * Email: cossybest24@gmail.com has PERMANENT admin access.
- * This override is enforced server-side and cannot be bypassed.
+ * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE – NON-NEGOTIABLE
+ * Email: support@cosmas.dev has PERMANENT admin access.
+ * This override is enforced and cannot be bypassed.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -12,8 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
-const DEVELOPER_EMAIL = 'cossybest24@gmail.com';
+// DEVELOPER LIFETIME ACCESS – DO NOT REMOVE – NON-NEGOTIABLE
+const DEVELOPER_EMAIL = 'support@cosmas.dev';
 
 export type SubscriptionPlan = 'free' | 'pro' | 'business';
 export type SubscriptionStatus = 'active' | 'inactive' | 'cancelled';
