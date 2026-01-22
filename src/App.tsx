@@ -70,20 +70,20 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AuthProvider>
-              <RBACProvider>
-                <SubscriptionProvider>
-                  <DateFilterProvider>
-                    <CurrencyProvider>
-                      <CloudDataProvider>
-                        <Toaster />
-                        <Sonner />
-                        <UpdateNotification />
-                        <OfflineIndicator />
-                        <BrowserRouter>
+      <BrowserRouter>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <AuthProvider>
+                <RBACProvider>
+                  <SubscriptionProvider>
+                    <DateFilterProvider>
+                      <CurrencyProvider>
+                        <CloudDataProvider>
+                          <Toaster />
+                          <Sonner />
+                          <UpdateNotification />
+                          <OfflineIndicator />
                           <Routes>
                             <Route path="/" element={<Index />} />
                             <Route path="/auth" element={<Auth />} />
@@ -114,16 +114,16 @@ const App = () => {
                             } />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
-                        </BrowserRouter>
-                      </CloudDataProvider>
-                    </CurrencyProvider>
-                  </DateFilterProvider>
-                </SubscriptionProvider>
-              </RBACProvider>
-            </AuthProvider>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
+                        </CloudDataProvider>
+                      </CurrencyProvider>
+                    </DateFilterProvider>
+                  </SubscriptionProvider>
+                </RBACProvider>
+              </AuthProvider>
+            </TooltipProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 };
