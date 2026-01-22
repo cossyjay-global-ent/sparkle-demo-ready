@@ -128,7 +128,8 @@ export default function ProductsPage() {
 
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-  const totalValue = products.reduce((sum, p) => sum + (p.selling_price * p.stock), 0);
+  // Stock value calculated from cost price (inventory investment value)
+  const totalValue = products.reduce((sum, p) => sum + (p.cost_price * p.stock), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
