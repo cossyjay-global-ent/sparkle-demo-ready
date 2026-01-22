@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Loader2, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -17,6 +19,9 @@ const Auth = () => {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirm, setSignupConfirm] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   // Determine default tab based on route
   const defaultTab = location.pathname === '/auth/register' ? 'signup' : 'login';
@@ -49,6 +54,11 @@ const Auth = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (signupPassword !== signupConfirm) {
+      toast({
+        title: "Passwords don't match",
+        description: "Please make sure both passwords are the same",
+        variant: "destructive"
+      });
       return;
     }
     setIsLoading(true);
@@ -58,6 +68,39 @@ const Auth = () => {
       const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
       sessionStorage.removeItem('redirectAfterLogin');
       navigate(redirectTo);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsResetting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.toLowerCase().trim(), {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    setIsResetting(false);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Reset link sent!",
+        description: "Check your email for a password reset link"
+      });
+      setShowForgotPassword(false);
+      setResetEmail('');
     }
   };
 
@@ -123,6 +166,13 @@ const Auth = () => {
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sign In'}
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotPassword(true); setResetEmail(loginEmail); }}
+                    className="w-full text-sm text-primary hover:underline mt-2"
+                  >
+                    Forgot your password?
+                  </button>
                 </form>
               </TabsContent>
 
@@ -183,6 +233,49 @@ const Auth = () => {
           </div>
         </div>
       </main>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl shadow-xl border border-border p-6 w-full max-w-md animate-fade-in">
+            <h2 className="text-xl font-bold text-foreground mb-2">Reset Password</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  className="input-styled"
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setShowForgotPassword(false); setResetEmail(''); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 btn-primary-gradient"
+                  disabled={isResetting}
+                >
+                  {isResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
