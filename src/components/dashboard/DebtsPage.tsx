@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useCloudData } from '@/contexts/CloudDataContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,11 +26,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, CreditCard, Edit2, Trash2, Phone, ArrowLeft, X } from 'lucide-react';
+import { Plus, Eye, CreditCard, Edit2, Trash2, Phone, ArrowLeft, X, MessageCircle } from 'lucide-react';
 import { Tables, Json } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { v4 as generateId } from 'uuid';
+import { openWhatsAppReminder, DebtMessageData } from '@/lib/whatsapp';
 
 type Debt = Tables<'debts'>;
 type DebtPayment = Tables<'debt_payments'>;
@@ -67,6 +70,7 @@ export default function DebtsPage() {
   const { getDebts, addDebt, updateDebt, deleteDebt, getDebtPayments, addDebtPayment, getCustomers, addCustomer } = useCloudData();
   const { canDeleteDebt } = useRBAC();
   const { currency } = useCurrency();
+  const { user } = useAuth();
   const [debts, setDebts] = useState<Debt[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [payments, setPayments] = useState<DebtPayment[]>([]);
@@ -75,6 +79,7 @@ export default function DebtsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [debtToDelete, setDebtToDelete] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState<string>('Your Business');
 
   // New debt form state
   const [newDebtForm, setNewDebtForm] = useState({
@@ -100,12 +105,30 @@ export default function DebtsPage() {
 
   useEffect(() => {
     loadData();
+    loadBusinessName();
   }, []);
 
   const loadData = async () => {
     const [debtsData, customersData] = await Promise.all([getDebts(), getCustomers()]);
     setDebts(debtsData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     setCustomers(customersData);
+  };
+
+  const loadBusinessName = async () => {
+    if (!user?.id) return;
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (profile?.display_name) {
+        setBusinessName(profile.display_name);
+      }
+    } catch (error) {
+      console.log('Using default business name');
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -129,6 +152,37 @@ export default function DebtsPage() {
 
   const getBalance = (debt: Debt) => {
     return Math.max(0, debt.total_amount - debt.paid_amount);
+  };
+
+  // WhatsApp reminder handler
+  const handleWhatsAppReminder = (debt: Debt) => {
+    if (!debt.customer_phone) {
+      toast({ 
+        title: "No Phone Number", 
+        description: "This customer doesn't have a phone number on file.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    const balance = getBalance(debt);
+    const messageData: DebtMessageData = {
+      customerName: debt.customer_name,
+      customerPhone: debt.customer_phone,
+      totalAmount: debt.total_amount,
+      paidAmount: debt.paid_amount,
+      balance,
+      businessName,
+      currencySymbol: currency.symbol,
+    };
+
+    const success = openWhatsAppReminder(messageData);
+    if (success) {
+      toast({ 
+        title: "WhatsApp Opened", 
+        description: "Review and send the message in WhatsApp." 
+      });
+    }
   };
 
   // New Debt handlers
@@ -475,6 +529,16 @@ export default function DebtsPage() {
                     <CreditCard className="w-4 h-4 mr-1" />
                     Payment
                   </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleWhatsAppReminder(debt)}
+                    className="text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10"
+                    title="Send WhatsApp Reminder"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-1" />
+                    Remind
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => handleEditDebt(debt)}>
                     <Edit2 className="w-4 h-4 mr-1" />
                     Edit
@@ -728,10 +792,18 @@ export default function DebtsPage() {
         </Card>
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => handleEditDebt(selectedDebt)}>
             <Edit2 className="w-4 h-4 mr-2" />
             Edit
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => handleWhatsAppReminder(selectedDebt)}
+            className="text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10"
+          >
+            <MessageCircle className="w-4 h-4 mr-2" />
+            WhatsApp Reminder
           </Button>
           <Button onClick={() => handlePaymentClick(selectedDebt)} className="btn-primary-gradient">
             <CreditCard className="w-4 h-4 mr-2" />
