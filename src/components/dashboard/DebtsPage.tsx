@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCloudData } from '@/contexts/CloudDataContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
