@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -13,24 +13,75 @@ import {
   Shield,
   Edit,
   Save,
-  X
+  X,
+  Building2,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { role } = useRBAC();
   const [isEditing, setIsEditing] = useState(false);
-  const [displayName, setDisplayName] = useState(user?.email?.split('@')[0] || 'User');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [displayName, setDisplayName] = useState('');
 
-  const handleSave = () => {
-    // In production, this would update the profile
-    toast.success('Profile updated successfully');
-    setIsEditing(false);
+  // Load profile data from Supabase on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) throw error;
+        
+        // Use display_name from DB, or fallback to email prefix
+        setDisplayName(profile?.display_name || user.email?.split('@')[0] || 'User');
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        setDisplayName(user.email?.split('@')[0] || 'User');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [user?.id, user?.email]);
+
+  const handleSave = async () => {
+    if (!user?.id) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          display_name: displayName.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      
+      toast.success('Profile updated successfully! Your business name will appear in WhatsApp messages.');
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error('Error saving profile:', error);
+      toast.error(error.message || 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getInitials = (email: string | undefined) => {
@@ -65,11 +116,15 @@ const Profile = () => {
             </Button>
           ) : (
             <div className="flex gap-2">
-              <Button variant="ghost" size="icon" onClick={() => setIsEditing(false)}>
+              <Button variant="ghost" size="icon" onClick={() => setIsEditing(false)} disabled={isSaving}>
                 <X className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleSave}>
-                <Save className="w-5 h-5 text-primary" />
+              <Button variant="ghost" size="icon" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5 text-primary" />
+                )}
               </Button>
             </div>
           )}
@@ -85,11 +140,16 @@ const Profile = () => {
             </AvatarFallback>
           </Avatar>
           
-          {isEditing ? (
+          {isLoading ? (
+            <div className="h-8 flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : isEditing ? (
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               className="max-w-xs mx-auto text-center text-xl font-bold"
+              placeholder="Your Business Name"
             />
           ) : (
             <h2 className="text-2xl font-bold text-foreground">{displayName}</h2>
@@ -100,6 +160,35 @@ const Profile = () => {
               {role === 'admin' ? 'Administrator' : 'Staff Member'}
             </Badge>
           )}
+        </section>
+
+        {/* Business Name Info */}
+        <section className="space-y-4">
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-primary" />
+            Business Information
+          </h3>
+          
+          <Card className="card-glass">
+            <CardContent className="pt-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Business/Display Name</Label>
+                {isEditing ? (
+                  <Input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Enter your business name"
+                    className="input-styled"
+                  />
+                ) : (
+                  <p className="font-medium">{displayName || 'Not set'}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  This name appears in WhatsApp reminder messages sent to customers.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Account Information */}
@@ -152,7 +241,7 @@ const Profile = () => {
                   <p className="font-medium">Password</p>
                   <p className="text-sm text-muted-foreground">Last changed: Unknown</p>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => navigate('/settings')}>
                   Change
                 </Button>
               </div>
