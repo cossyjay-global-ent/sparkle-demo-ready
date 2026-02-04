@@ -43,12 +43,21 @@ const formatAmount = (amount: number, symbol: string): string => {
 
 /**
  * Generate message based on debt payment status
+ * Logic:
+ * - Case 1: Outstanding Debt (balance > 0 AND paidAmount === 0) - No payment made yet
+ * - Case 2: Partial Payment (balance > 0 AND paidAmount > 0) - Some payment made
+ * - Case 3: Fully Paid (balance <= 0) - Debt fully settled
  */
 export const generateDebtMessage = (data: DebtMessageData): string => {
   const { customerName, totalAmount, paidAmount, balance, businessName, currencySymbol } = data;
   
-  // Case 3: Fully Paid (balance = 0)
-  if (balance <= 0) {
+  // Ensure numeric values are properly cast
+  const numericBalance = Number(balance) || 0;
+  const numericPaidAmount = Number(paidAmount) || 0;
+  const numericTotalAmount = Number(totalAmount) || 0;
+  
+  // Case 3: Fully Paid (balance <= 0) - Check this FIRST
+  if (numericBalance <= 0) {
     return `Hello ${customerName},
 
 We confirm that your payment has been fully received.
@@ -63,16 +72,16 @@ Warm regards,
 ${businessName}`;
   }
   
-  // Case 2: Partial Payment Made (balance > 0 AND paid_amount > 0)
-  if (paidAmount > 0) {
+  // Case 2: Partial Payment Made (balance > 0 AND paidAmount > 0)
+  if (numericBalance > 0 && numericPaidAmount > 0) {
     return `Hello ${customerName},
 
 Thank you for your partial payment.
 
 Payment Summary:
-Total Amount: ${formatAmount(totalAmount, currencySymbol)}
-Amount Paid: ${formatAmount(paidAmount, currencySymbol)}
-Outstanding Balance: ${formatAmount(balance, currencySymbol)}
+Total Amount: ${formatAmount(numericTotalAmount, currencySymbol)}
+Amount Paid: ${formatAmount(numericPaidAmount, currencySymbol)}
+Outstanding Balance: ${formatAmount(numericBalance, currencySymbol)}
 
 We kindly request that the remaining balance be settled at your convenience.
 
@@ -84,13 +93,13 @@ Best regards,
 ${businessName}`;
   }
   
-  // Case 1: Outstanding Debt (balance > 0 AND paid_amount = 0)
+  // Case 1: Outstanding Debt (balance > 0 AND paidAmount === 0) - No payment made
   return `Hello ${customerName},
 
 This is a polite reminder regarding your outstanding payment with us.
 
-Total Amount: ${formatAmount(totalAmount, currencySymbol)}
-Outstanding Balance: ${formatAmount(balance, currencySymbol)}
+Total Amount: ${formatAmount(numericTotalAmount, currencySymbol)}
+Outstanding Balance: ${formatAmount(numericBalance, currencySymbol)}
 
 We kindly request that payment be made at your earliest convenience.
 
