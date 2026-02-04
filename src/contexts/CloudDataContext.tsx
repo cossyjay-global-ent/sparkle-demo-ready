@@ -118,26 +118,44 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== PRODUCTS ====================
   
   const addProduct = useCallback(async (data: ProductInsert): Promise<Product | null> => {
-    if (!user?.id) return null;
+    if (!user?.id) {
+      console.error('[CloudData] Cannot add product: No authenticated user');
+      toast({ title: "Error", description: "You must be logged in to add products", variant: "destructive" });
+      return null;
+    }
+    
     try {
-      // CLOUD-SYNC-CRITICAL: Insert directly to Supabase
+      // CLOUD-SYNC-CRITICAL: Validate and cast numeric fields before insert
+      const productData = {
+        name: String(data.name || '').trim(),
+        cost_price: Number(data.cost_price) || 0,
+        selling_price: Number(data.selling_price) || 0,
+        stock: Math.floor(Number(data.stock)) || 0,
+        category: data.category ? String(data.category).trim() : null,
+        user_id: user.id,
+      };
+      
+      console.log('[CloudData] Inserting product:', productData);
+      
       const { data: product, error } = await supabase
         .from('products')
-        .insert({
-          ...data,
-          user_id: user.id,
-        })
+        .insert(productData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[CloudData] Supabase error adding product:', error.message, error.code, error.details);
+        toast({ title: "Error", description: `Failed to add product: ${error.message}`, variant: "destructive" });
+        return null;
+      }
       
+      console.log('[CloudData] Product added successfully:', product);
       await logAction('create', 'products', product.id, `Created product: ${product.name}`, undefined, product);
       toast({ title: "Success", description: "Product added successfully" });
       return product;
-    } catch (error) {
-      console.error('Add product error:', error);
-      toast({ title: "Error", description: "Failed to add product", variant: "destructive" });
+    } catch (error: any) {
+      console.error('[CloudData] Unexpected error adding product:', error);
+      toast({ title: "Error", description: error?.message || "Failed to add product", variant: "destructive" });
       return null;
     }
   }, [user?.id, logAction]);

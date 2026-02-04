@@ -86,40 +86,79 @@ export default function ProductsPage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.costPrice || !formData.sellingPrice || !formData.stock) {
-      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+    // Validate required fields
+    if (!formData.name.trim()) {
+      toast({ title: "Error", description: "Product name is required", variant: "destructive" });
+      return;
+    }
+    
+    // Parse and validate numeric fields
+    const costPrice = Number(formData.costPrice);
+    const sellingPrice = Number(formData.sellingPrice);
+    const stock = Number(formData.stock);
+    
+    if (isNaN(costPrice) || costPrice < 0) {
+      toast({ title: "Error", description: "Please enter a valid cost price", variant: "destructive" });
+      return;
+    }
+    
+    if (isNaN(sellingPrice) || sellingPrice < 0) {
+      toast({ title: "Error", description: "Please enter a valid selling price", variant: "destructive" });
+      return;
+    }
+    
+    if (isNaN(stock) || stock < 0 || !Number.isInteger(stock)) {
+      toast({ title: "Error", description: "Please enter a valid stock quantity (whole number)", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
     
-    if (editingProduct) {
-      const success = await updateProduct(editingProduct.id, {
-        name: formData.name,
-        cost_price: parseFloat(formData.costPrice),
-        selling_price: parseFloat(formData.sellingPrice),
-        stock: parseInt(formData.stock),
-        category: formData.category || null
-      });
-      if (success) {
-        toast({ title: "Success", description: "Product updated" });
+    try {
+      if (editingProduct) {
+        const success = await updateProduct(editingProduct.id, {
+          name: formData.name.trim(),
+          cost_price: costPrice,
+          selling_price: sellingPrice,
+          stock: stock,
+          category: formData.category.trim() || null
+        });
+        if (success) {
+          toast({ title: "Success", description: "Product updated" });
+          setIsDialogOpen(false);
+          resetForm();
+        }
+      } else {
+        console.log('[Products] Adding product with data:', {
+          name: formData.name.trim(),
+          cost_price: costPrice,
+          selling_price: sellingPrice,
+          stock: stock,
+          category: formData.category.trim() || null
+        });
+        
+        const product = await addProduct({
+          name: formData.name.trim(),
+          cost_price: costPrice,
+          selling_price: sellingPrice,
+          stock: stock,
+          category: formData.category.trim() || null
+        });
+        
+        if (product) {
+          console.log('[Products] Product added successfully:', product);
+          setIsDialogOpen(false);
+          resetForm();
+        } else {
+          console.error('[Products] Failed to add product - no product returned');
+        }
       }
-    } else {
-      const product = await addProduct({
-        name: formData.name,
-        cost_price: parseFloat(formData.costPrice),
-        selling_price: parseFloat(formData.sellingPrice),
-        stock: parseInt(formData.stock),
-        category: formData.category || null
-      });
-      if (product) {
-        // Real-time will handle the refresh
-      }
+    } catch (error) {
+      console.error('[Products] Error in handleSubmit:', error);
+      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsDialogOpen(false);
-    resetForm();
-    setIsLoading(false);
   };
 
   const handleDelete = async (id: string) => {
