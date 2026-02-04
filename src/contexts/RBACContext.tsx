@@ -2,8 +2,9 @@
  * ROLE-BASED ACCESS CONTROL (RBAC) CONTEXT
  * Manages user roles and permissions.
  * 
- * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
- * Email: cossybest24@gmail.com has permanent admin access.
+ * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE – NON-NEGOTIABLE
+ * Email: support@cosmas.dev has permanent admin access.
+ * This override is enforced and cannot be bypassed.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
