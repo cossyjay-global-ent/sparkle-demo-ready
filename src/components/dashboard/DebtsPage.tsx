@@ -558,6 +558,29 @@ export default function DebtsPage() {
     </div>
   );
 
+  // Handle customer selection from dropdown
+  const handleCustomerSelect = (customerId: string) => {
+    if (customerId === 'new') {
+      // User wants to add a new customer manually
+      setNewDebtForm(prev => ({
+        ...prev,
+        customerId: '',
+        customerName: '',
+        customerPhone: ''
+      }));
+    } else {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      if (selectedCustomer) {
+        setNewDebtForm(prev => ({
+          ...prev,
+          customerId: selectedCustomer.id,
+          customerName: selectedCustomer.name,
+          customerPhone: selectedCustomer.phone || ''
+        }));
+      }
+    }
+  };
+
   // Render Add New Bundle view
   const renderAddView = () => (
     <div className="space-y-6 animate-fade-in">
@@ -581,11 +604,29 @@ export default function DebtsPage() {
           />
         </div>
 
+        {/* Customer Dropdown */}
+        <div className="space-y-2">
+          <Label>Select Customer</Label>
+          <select
+            value={newDebtForm.customerId}
+            onChange={(e) => handleCustomerSelect(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">-- Select a customer or add new --</option>
+            <option value="new">+ Add New Customer</option>
+            {customers.map(customer => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name} {customer.phone ? `(${customer.phone})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-2">
           <Label>Customer Name *</Label>
           <Input
             value={newDebtForm.customerName}
-            onChange={(e) => setNewDebtForm(prev => ({ ...prev, customerName: e.target.value }))}
+            onChange={(e) => setNewDebtForm(prev => ({ ...prev, customerName: e.target.value, customerId: '' }))}
             placeholder="Customer name"
             className="input-styled"
           />
