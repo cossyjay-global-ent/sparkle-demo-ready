@@ -1,5 +1,5 @@
 import { useState, useEffect, forwardRef } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useCloudData } from '@/contexts/CloudDataContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,14 +22,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Plus, Users, Trash2, Edit2, Phone, Eye, CreditCard, ArrowLeft, Search } from 'lucide-react';
-import { Customer, Debt } from '@/lib/database';
+import { Tables } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+
+type Customer = Tables<'customers'>;
+type Debt = Tables<'debts'>;
 
 type ViewMode = 'list' | 'view';
 
 const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
-  const { getCustomers, addCustomer, updateCustomer, deleteCustomer, getDebts } = useData();
+  const { getCustomers, addCustomer, updateCustomer, deleteCustomer, getDebts } = useCloudData();
   const { currency } = useCurrency();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -54,7 +57,8 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
 
   const loadData = async () => {
     const [customersData, debtsData] = await Promise.all([getCustomers(), getDebts()]);
-    setCustomers(customersData.sort((a, b) => b.createdAt - a.createdAt));
+    // Sort by created_at (ISO string from Supabase)
+    setCustomers(customersData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
     setDebts(debtsData);
   };
 
@@ -89,9 +93,9 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
     if (editingCustomer) {
       const success = await updateCustomer(editingCustomer.id, {
         name: formData.name,
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
-        address: formData.address || undefined
+        phone: formData.phone || null,
+        email: formData.email || null,
+        address: formData.address || null
       });
       if (success) {
         toast({ title: "Success", description: "Customer updated" });
@@ -143,19 +147,23 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
     return `${currency.symbol}${amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const formatDate = (timestamp: number) => {
-    return format(new Date(timestamp), 'd/M/yyyy');
+  const formatDate = (dateValue: string | number) => {
+    const date = typeof dateValue === 'number' ? new Date(dateValue) : new Date(dateValue);
+    return format(date, 'd/M/yyyy');
   };
 
-  // Get customer debt info
+  // Get customer debt info using snake_case fields from Supabase
   const getCustomerDebtInfo = (customerId: string) => {
-    const customerDebts = debts.filter(d => d.customerId === customerId);
-    const totalAmount = customerDebts.reduce((sum, d) => sum + d.totalAmount, 0);
-    const paidAmount = customerDebts.reduce((sum, d) => sum + d.paidAmount, 0);
-    const balance = totalAmount - paidAmount;
+    const customerDebts = debts.filter(d => d.customer_id === customerId);
+    const totalAmount = customerDebts.reduce((sum, d) => sum + Number(d.total_amount), 0);
+    const paidAmount = customerDebts.reduce((sum, d) => sum + Number(d.paid_amount), 0);
+    const balance = Math.max(0, totalAmount - paidAmount);
     const status = balance <= 0 ? 'PAID' : 'UNPAID';
     const lastDebtDate = customerDebts.length > 0 
-      ? Math.max(...customerDebts.map(d => d.date))
+      ? customerDebts.reduce((latest, d) => {
+          const dDate = new Date(d.date).getTime();
+          return dDate > latest ? dDate : latest;
+        }, 0)
       : null;
     return { totalAmount, paidAmount, balance, status, lastDebtDate, debtCount: customerDebts.length };
   };
@@ -173,7 +181,7 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
   const renderViewMode = () => {
     if (!selectedCustomer) return null;
     const debtInfo = getCustomerDebtInfo(selectedCustomer.id);
-    const customerDebts = debts.filter(d => d.customerId === selectedCustomer.id);
+    const customerDebts = debts.filter(d => d.customer_id === selectedCustomer.id);
 
     return (
       <div className="space-y-6 animate-fade-in">
@@ -189,8 +197,8 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
             <h2 className="text-xl font-semibold text-foreground">{selectedCustomer.name}</h2>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${
               debtInfo.status === 'PAID' 
-                ? 'bg-emerald-500/20 text-emerald-500' 
-                : 'bg-red-500/20 text-red-500'
+                ? 'bg-success/20 text-success' 
+                : 'bg-destructive/20 text-destructive'
             }`}>
               {debtInfo.status}
             </span>
@@ -222,31 +230,34 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
         {customerDebts.length > 0 && (
           <div className="space-y-4">
             <h3 className="font-semibold text-foreground">Debt History ({customerDebts.length})</h3>
-            {customerDebts.map(debt => (
-              <Card key={debt.id} className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <p className="text-sm text-muted-foreground">{formatDate(debt.date)}</p>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    debt.totalAmount - debt.paidAmount <= 0
-                      ? 'bg-emerald-500/20 text-emerald-500' 
-                      : 'bg-red-500/20 text-red-500'
-                  }`}>
-                    {debt.totalAmount - debt.paidAmount <= 0 ? 'PAID' : 'UNPAID'}
-                  </span>
-                </div>
-                <p className="text-sm text-foreground mb-2">{debt.description}</p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Total:</p>
-                    <p className="font-semibold">{formatCurrency(debt.totalAmount)}</p>
+            {customerDebts.map(debt => {
+              const debtBalance = Math.max(0, Number(debt.total_amount) - Number(debt.paid_amount));
+              return (
+                <Card key={debt.id} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm text-muted-foreground">{formatDate(debt.date)}</p>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      debtBalance <= 0
+                        ? 'bg-success/20 text-success' 
+                        : 'bg-destructive/20 text-destructive'
+                    }`}>
+                      {debtBalance <= 0 ? 'PAID' : 'UNPAID'}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Balance:</p>
-                    <p className="font-semibold">{formatCurrency(Math.max(0, debt.totalAmount - debt.paidAmount))}</p>
+                  <p className="text-sm text-foreground mb-2">{debt.description}</p>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Total:</p>
+                      <p className="font-semibold">{formatCurrency(Number(debt.total_amount))}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Balance:</p>
+                      <p className="font-semibold">{formatCurrency(debtBalance)}</p>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -303,8 +314,8 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
                   <h3 className="font-semibold text-foreground text-lg">{customer.name}</h3>
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                     debtInfo.status === 'PAID' 
-                      ? 'bg-emerald-500/20 text-emerald-500' 
-                      : 'bg-red-500/20 text-red-500'
+                      ? 'bg-success/20 text-success' 
+                      : 'bg-destructive/20 text-destructive'
                   }`}>
                     {debtInfo.status}
                   </span>
