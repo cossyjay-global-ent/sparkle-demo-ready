@@ -80,6 +80,8 @@ export default function DebtsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [debtToDelete, setDebtToDelete] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string>('Your Business');
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
+  const [paidDebtForWhatsapp, setPaidDebtForWhatsapp] = useState<Debt | null>(null);
 
   // New debt form state
   const [newDebtForm, setNewDebtForm] = useState({
@@ -407,12 +409,37 @@ export default function DebtsPage() {
 
     if (payment) {
       toast({ title: "Success", description: "Payment recorded" });
+      
+      // Reload data to get updated debt info
+      const updatedDebts = await getDebts();
+      setDebts(updatedDebts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      
+      // Find the updated debt and show WhatsApp dialog if customer has phone
+      const updatedDebt = updatedDebts.find(d => d.id === selectedDebt.id);
+      if (updatedDebt && updatedDebt.customer_phone) {
+        setPaidDebtForWhatsapp(updatedDebt);
+        setWhatsappDialogOpen(true);
+      }
+      
       setViewMode('list');
       setPaymentAmount('');
       setPaymentDescription('');
-      loadData();
     }
     setIsLoading(false);
+  };
+
+  // WhatsApp dialog handlers
+  const handleWhatsappDialogConfirm = () => {
+    if (paidDebtForWhatsapp) {
+      handleWhatsAppReminder(paidDebtForWhatsapp);
+    }
+    setWhatsappDialogOpen(false);
+    setPaidDebtForWhatsapp(null);
+  };
+
+  const handleWhatsappDialogCancel = () => {
+    setWhatsappDialogOpen(false);
+    setPaidDebtForWhatsapp(null);
   };
 
   // Delete handler - with confirmation
@@ -1059,6 +1086,28 @@ export default function DebtsPage() {
             <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* WhatsApp Reminder Dialog - Shows after payment */}
+      <AlertDialog open={whatsappDialogOpen} onOpenChange={setWhatsappDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-success" />
+              Send WhatsApp Reminder?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Payment recorded successfully! Would you like to send a WhatsApp message to {paidDebtForWhatsapp?.customer_name} about this payment?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleWhatsappDialogCancel}>No, Thanks</AlertDialogCancel>
+            <AlertDialogAction onClick={handleWhatsappDialogConfirm} className="bg-success text-success-foreground hover:bg-success/90">
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Send WhatsApp
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
