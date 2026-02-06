@@ -117,22 +117,34 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
 
   // ==================== PRODUCTS ====================
   
-  const addProduct = useCallback(async (data: ProductInsert): Promise<Product | null> => {
+  // STABILITY-GUARD: Helper to validate session before all mutations
+  const validateSession = useCallback((): boolean => {
     if (!user?.id) {
-      console.error('[CloudData] Cannot add product: No authenticated user');
-      toast({ title: "Error", description: "You must be logged in to add products", variant: "destructive" });
-      return null;
+      console.error('[CloudData] Session guard: No authenticated user');
+      toast({ title: "Session Required", description: "Please log in to continue", variant: "destructive" });
+      return false;
     }
+    return true;
+  }, [user?.id]);
+
+  // STABILITY-GUARD: Safe number helper - prevents NaN/undefined in calculations
+  const safeNumber = (value: any, defaultValue: number = 0): number => {
+    const num = Number(value);
+    return isNaN(num) || !isFinite(num) ? defaultValue : num;
+  };
+
+  const addProduct = useCallback(async (data: ProductInsert): Promise<Product | null> => {
+    if (!validateSession()) return null;
     
     try {
       // CLOUD-SYNC-CRITICAL: Validate and cast numeric fields before insert
       const productData = {
         name: String(data.name || '').trim(),
-        cost_price: Number(data.cost_price) || 0,
-        selling_price: Number(data.selling_price) || 0,
-        stock: Math.floor(Number(data.stock)) || 0,
+        cost_price: safeNumber(data.cost_price, 0),
+        selling_price: safeNumber(data.selling_price, 0),
+        stock: Math.floor(safeNumber(data.stock, 0)),
         category: data.category ? String(data.category).trim() : null,
-        user_id: user.id,
+        user_id: user!.id,
       };
       
       console.log('[CloudData] Inserting product:', productData);
@@ -158,24 +170,33 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: error?.message || "Failed to add product", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const updateProduct = useCallback(async (id: string, data: Partial<Product>): Promise<boolean> => {
+    if (!validateSession()) return false;
+    
     try {
+      // STABILITY-GUARD: Ensure numeric fields are safe
+      const cleanData = { ...data };
+      if ('cost_price' in cleanData) cleanData.cost_price = safeNumber(cleanData.cost_price);
+      if ('selling_price' in cleanData) cleanData.selling_price = safeNumber(cleanData.selling_price);
+      if ('stock' in cleanData) cleanData.stock = Math.floor(safeNumber(cleanData.stock));
+
       const { error } = await supabase
         .from('products')
-        .update({ ...data, updated_at: new Date().toISOString() })
+        .update({ ...cleanData, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .eq('user_id', user?.id);
+        .eq('user_id', user!.id);
 
       if (error) throw error;
       await logAction('update', 'products', id, `Updated product`, undefined, data);
       return true;
     } catch (error) {
       console.error('Update product error:', error);
+      toast({ title: "Error", description: "Failed to update product", variant: "destructive" });
       return false;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const deleteProduct = useCallback(async (id: string): Promise<boolean> => {
     try {
@@ -222,14 +243,23 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== SALES ====================
 
   const addSale = useCallback(async (data: SaleInsert): Promise<Sale | null> => {
-    if (!user?.id) return null;
+    if (!validateSession()) return null;
+    
     try {
+      // STABILITY-GUARD: Ensure all numeric fields are safe
+      const saleData = {
+        ...data,
+        quantity: Math.floor(safeNumber(data.quantity, 1)),
+        unit_price: safeNumber(data.unit_price, 0),
+        cost_price: safeNumber(data.cost_price, 0),
+        total_amount: safeNumber(data.total_amount, 0),
+        profit: safeNumber(data.profit, 0),
+        user_id: user!.id,
+      };
+
       const { data: sale, error } = await supabase
         .from('sales')
-        .insert({
-          ...data,
-          user_id: user.id,
-        })
+        .insert(saleData)
         .select()
         .single();
 
@@ -246,7 +276,7 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
         if (product) {
           await supabase
             .from('products')
-            .update({ stock: Math.max(0, product.stock - (data.quantity || 1)) })
+            .update({ stock: Math.max(0, safeNumber(product.stock) - saleData.quantity) })
             .eq('id', data.product_id);
         }
       }
@@ -259,7 +289,7 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: "Failed to record sale", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const getSales = useCallback(async (startDate?: Date, endDate?: Date): Promise<Sale[]> => {
     if (!user?.id) return [];
@@ -313,14 +343,19 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== EXPENSES ====================
 
   const addExpense = useCallback(async (data: ExpenseInsert): Promise<Expense | null> => {
-    if (!user?.id) return null;
+    if (!validateSession()) return null;
+    
     try {
+      // STABILITY-GUARD: Ensure amount is safe
+      const expenseData = {
+        ...data,
+        amount: safeNumber(data.amount, 0),
+        user_id: user!.id,
+      };
+
       const { data: expense, error } = await supabase
         .from('expenses')
-        .insert({
-          ...data,
-          user_id: user.id,
-        })
+        .insert(expenseData)
         .select()
         .single();
 
@@ -333,7 +368,7 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: "Failed to add expense", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const getExpenses = useCallback(async (startDate?: Date, endDate?: Date): Promise<Expense[]> => {
     if (!user?.id) return [];
@@ -387,13 +422,14 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== CUSTOMERS ====================
 
   const addCustomer = useCallback(async (data: CustomerInsert): Promise<Customer | null> => {
-    if (!user?.id) return null;
+    if (!validateSession()) return null;
+    
     try {
       const { data: customer, error } = await supabase
         .from('customers')
         .insert({
           ...data,
-          user_id: user.id,
+          user_id: user!.id,
         })
         .select()
         .single();
@@ -407,24 +443,27 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: "Failed to add customer", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const updateCustomer = useCallback(async (id: string, data: Partial<Customer>): Promise<boolean> => {
+    if (!validateSession()) return false;
+    
     try {
       const { error } = await supabase
         .from('customers')
         .update({ ...data, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .eq('user_id', user?.id);
+        .eq('user_id', user!.id);
 
       if (error) throw error;
       await logAction('update', 'customers', id, `Updated customer`, undefined, data);
       return true;
     } catch (error) {
       console.error('Update customer error:', error);
+      toast({ title: "Error", description: "Failed to update customer", variant: "destructive" });
       return false;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const deleteCustomer = useCallback(async (id: string): Promise<boolean> => {
     try {
@@ -471,15 +510,21 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== DEBTS ====================
 
   const addDebt = useCallback(async (data: DebtInsert): Promise<Debt | null> => {
-    if (!user?.id) return null;
+    if (!validateSession()) return null;
+    
     try {
+      // STABILITY-GUARD: Ensure numeric fields are safe
+      const debtData = {
+        ...data,
+        total_amount: safeNumber(data.total_amount, 0),
+        paid_amount: safeNumber(data.paid_amount, 0),
+        user_id: user!.id,
+        delete_status: 'active',
+      };
+
       const { data: debt, error } = await supabase
         .from('debts')
-        .insert({
-          ...data,
-          user_id: user.id,
-          delete_status: 'active',
-        })
+        .insert(debtData)
         .select()
         .single();
 
@@ -492,24 +537,32 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: "Failed to add debt", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const updateDebt = useCallback(async (id: string, data: Partial<Debt>): Promise<boolean> => {
+    if (!validateSession()) return false;
+    
     try {
+      // STABILITY-GUARD: Ensure numeric fields are safe
+      const cleanData = { ...data };
+      if ('total_amount' in cleanData) cleanData.total_amount = safeNumber(cleanData.total_amount);
+      if ('paid_amount' in cleanData) cleanData.paid_amount = safeNumber(cleanData.paid_amount);
+
       const { error } = await supabase
         .from('debts')
-        .update({ ...data, updated_at: new Date().toISOString() })
+        .update({ ...cleanData, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .eq('user_id', user?.id);
+        .eq('user_id', user!.id);
 
       if (error) throw error;
       await logAction('update', 'debts', id, `Updated debt`, undefined, data);
       return true;
     } catch (error) {
       console.error('Update debt error:', error);
+      toast({ title: "Error", description: "Failed to update debt", variant: "destructive" });
       return false;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const deleteDebt = useCallback(async (id: string): Promise<boolean> => {
     if (!canDeleteDebt) {
@@ -574,13 +627,23 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // ==================== DEBT PAYMENTS ====================
 
   const addDebtPayment = useCallback(async (data: DebtPaymentInsert): Promise<DebtPayment | null> => {
-    if (!user?.id) return null;
+    if (!validateSession()) return null;
+    
     try {
+      // STABILITY-GUARD: Ensure amount is safe
+      const paymentAmount = safeNumber(data.amount, 0);
+      
+      if (paymentAmount <= 0) {
+        toast({ title: "Error", description: "Payment amount must be greater than 0", variant: "destructive" });
+        return null;
+      }
+
       const { data: payment, error } = await supabase
         .from('debt_payments')
         .insert({
           ...data,
-          user_id: user.id,
+          amount: paymentAmount,
+          user_id: user!.id,
         })
         .select()
         .single();
@@ -595,8 +658,9 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (debt) {
-        const newPaidAmount = (debt.paid_amount || 0) + (data.amount || 0);
-        const newStatus = newPaidAmount >= debt.total_amount ? 'paid' : newPaidAmount > 0 ? 'partial' : 'pending';
+        const newPaidAmount = safeNumber(debt.paid_amount, 0) + paymentAmount;
+        const totalAmount = safeNumber(debt.total_amount, 0);
+        const newStatus = newPaidAmount >= totalAmount ? 'paid' : newPaidAmount > 0 ? 'partial' : 'pending';
         
         await supabase
           .from('debts')
@@ -608,7 +672,7 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
           .eq('id', data.debt_id);
       }
 
-      await logAction('payment', 'debt_payments', payment.id, `Payment of ${data.amount} recorded for debt`, undefined, payment);
+      await logAction('payment', 'debt_payments', payment.id, `Payment of ${paymentAmount} recorded for debt`, undefined, payment);
       toast({ title: "Success", description: "Payment recorded successfully" });
       return payment;
     } catch (error) {
@@ -616,7 +680,7 @@ export function CloudDataProvider({ children }: { children: React.ReactNode }) {
       toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
       return null;
     }
-  }, [user?.id, logAction]);
+  }, [user?.id, logAction, validateSession]);
 
   const getDebtPayments = useCallback(async (debtId: string): Promise<DebtPayment[]> => {
     try {

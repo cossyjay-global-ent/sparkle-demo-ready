@@ -13,7 +13,35 @@ interface State {
   error?: Error;
 }
 
+// Global error handler - catches unhandled errors and promise rejections
+function setupGlobalErrorHandlers(onError: (error: Error) => void) {
+  // Catch unhandled errors
+  const handleError = (event: ErrorEvent) => {
+    console.error('[GlobalError] Uncaught error:', event.error || event.message);
+    onError(event.error || new Error(event.message));
+  };
+
+  // Catch unhandled promise rejections
+  const handleRejection = (event: PromiseRejectionEvent) => {
+    console.error('[GlobalError] Unhandled promise rejection:', event.reason);
+    // Only treat critical rejections as fatal
+    if (event.reason?.message?.includes('Failed to fetch') === false) {
+      onError(event.reason instanceof Error ? event.reason : new Error(String(event.reason)));
+    }
+  };
+
+  window.addEventListener('error', handleError);
+  window.addEventListener('unhandledrejection', handleRejection);
+
+  return () => {
+    window.removeEventListener('error', handleError);
+    window.removeEventListener('unhandledrejection', handleRejection);
+  };
+}
+
 export class ErrorBoundary extends Component<Props, State> {
+  private cleanupGlobalHandlers?: () => void;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
@@ -23,8 +51,22 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidMount() {
+    // Setup global error handlers
+    this.cleanupGlobalHandlers = setupGlobalErrorHandlers((error) => {
+      // Only set error state if it's a critical error
+      if (!this.state.hasError) {
+        this.setState({ hasError: true, error });
+      }
+    });
+  }
+
+  componentWillUnmount() {
+    this.cleanupGlobalHandlers?.();
+  }
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
   }
 
   handleRefresh = () => {
