@@ -17,4 +17,9 @@ export default defineConfig(({ mode }) => ({
     // Prevent duplicate React instances
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
+  // Force re-optimization of React dependencies
+  optimizeDeps: {
+    include: ["react", "react-dom", "react/jsx-runtime"],
+    force: true,
+  },
 }));
