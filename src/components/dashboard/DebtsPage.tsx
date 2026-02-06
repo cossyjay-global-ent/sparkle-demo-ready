@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -82,6 +83,10 @@ export default function DebtsPage() {
   const [businessName, setBusinessName] = useState<string>('Your Business');
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [paidDebtForWhatsapp, setPaidDebtForWhatsapp] = useState<Debt | null>(null);
+  const [dontShowWhatsappAgain, setDontShowWhatsappAgain] = useState(false);
+  
+  // Load "Don't show again" preference from localStorage
+  const WHATSAPP_POPUP_PREF_KEY = 'whatsapp_popup_disabled';
 
   // New debt form state
   const [newDebtForm, setNewDebtForm] = useState({
@@ -414,11 +419,23 @@ export default function DebtsPage() {
       const updatedDebts = await getDebts();
       setDebts(updatedDebts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       
-      // Find the updated debt and show WhatsApp dialog if customer has phone
+      // Find the updated debt and show WhatsApp dialog if customer has valid phone
       const updatedDebt = updatedDebts.find(d => d.id === selectedDebt.id);
-      if (updatedDebt && updatedDebt.customer_phone) {
-        setPaidDebtForWhatsapp(updatedDebt);
-        setWhatsappDialogOpen(true);
+      if (updatedDebt) {
+        // Check if user has disabled WhatsApp popup
+        const popupDisabled = localStorage.getItem(WHATSAPP_POPUP_PREF_KEY) === 'true';
+        
+        // Validate phone number - must have at least 10 digits after sanitization
+        const phoneNumber = updatedDebt.customer_phone?.replace(/[^\d]/g, '') || '';
+        const hasValidPhone = phoneNumber.length >= 10;
+        
+        // Only show popup if: payment succeeded, popup not disabled, and valid phone exists
+        if (!popupDisabled && hasValidPhone) {
+          setPaidDebtForWhatsapp(updatedDebt);
+          setWhatsappDialogOpen(true);
+          // Optional: Log popup shown (no message content stored)
+          console.log('[WhatsApp] Popup shown for debt:', updatedDebt.id);
+        }
       }
       
       setViewMode('list');
@@ -430,16 +447,36 @@ export default function DebtsPage() {
 
   // WhatsApp dialog handlers
   const handleWhatsappDialogConfirm = () => {
+    // Save preference if "Don't show again" is checked
+    if (dontShowWhatsappAgain) {
+      localStorage.setItem(WHATSAPP_POPUP_PREF_KEY, 'true');
+    }
+    
     if (paidDebtForWhatsapp) {
       handleWhatsAppReminder(paidDebtForWhatsapp);
+      // Optional: Log message sent (no content stored)
+      console.log('[WhatsApp] Message sent for debt:', paidDebtForWhatsapp.id);
     }
     setWhatsappDialogOpen(false);
     setPaidDebtForWhatsapp(null);
+    setDontShowWhatsappAgain(false);
   };
 
   const handleWhatsappDialogCancel = () => {
+    // Save preference if "Don't show again" is checked
+    if (dontShowWhatsappAgain) {
+      localStorage.setItem(WHATSAPP_POPUP_PREF_KEY, 'true');
+    }
     setWhatsappDialogOpen(false);
     setPaidDebtForWhatsapp(null);
+    setDontShowWhatsappAgain(false);
+  };
+  
+  // Get message type based on balance (for display purposes only)
+  const getWhatsappMessageType = () => {
+    if (!paidDebtForWhatsapp) return '';
+    const balance = Number(paidDebtForWhatsapp.total_amount) - Number(paidDebtForWhatsapp.paid_amount);
+    return balance <= 0 ? 'Thank You (Fully Paid)' : 'Partial Payment Reminder';
   };
 
   // Delete handler - with confirmation
@@ -1099,10 +1136,31 @@ export default function DebtsPage() {
               <MessageCircle className="w-5 h-5 text-success" />
               Send WhatsApp Reminder?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Payment recorded successfully! Would you like to send a WhatsApp message to {paidDebtForWhatsapp?.customer_name} about this payment?
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Payment recorded successfully! Would you like to send a WhatsApp message to {paidDebtForWhatsapp?.customer_name} about this payment?
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Message type: <strong>{getWhatsappMessageType()}</strong>
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          
+          {/* Don't show again checkbox */}
+          <div className="flex items-center space-x-2 py-2">
+            <Checkbox 
+              id="dont-show-whatsapp" 
+              checked={dontShowWhatsappAgain}
+              onCheckedChange={(checked) => setDontShowWhatsappAgain(checked === true)}
+            />
+            <label 
+              htmlFor="dont-show-whatsapp" 
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
+              Don't show this again
+            </label>
+          </div>
+          
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleWhatsappDialogCancel}>No, Thanks</AlertDialogCancel>
             <AlertDialogAction onClick={handleWhatsappDialogConfirm} className="bg-success text-success-foreground hover:bg-success/90">
