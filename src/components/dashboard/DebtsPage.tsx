@@ -32,7 +32,8 @@ import { Tables, Json } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { v4 as generateId } from 'uuid';
-import { openWhatsAppReminder, DebtMessageData } from '@/lib/whatsapp';
+import { openWhatsAppReminder, generateDebtMessage, generateWhatsAppUrl, sanitizePhoneNumber, DebtMessageData } from '@/lib/whatsapp';
+import { WhatsAppPreviewDialog } from './WhatsAppPreviewDialog';
 
 type Debt = Tables<'debts'>;
 type DebtPayment = Tables<'debt_payments'>;
@@ -84,6 +85,8 @@ export default function DebtsPage() {
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false);
   const [paidDebtForWhatsapp, setPaidDebtForWhatsapp] = useState<Debt | null>(null);
   const [dontShowWhatsappAgain, setDontShowWhatsappAgain] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewDebt, setPreviewDebt] = useState<Debt | null>(null);
   
   // Load "Don't show again" preference from localStorage
   const WHATSAPP_POPUP_PREF_KEY = 'whatsapp_popup_disabled';
@@ -161,7 +164,66 @@ export default function DebtsPage() {
     return Math.max(0, debt.total_amount - debt.paid_amount);
   };
 
-  // WhatsApp reminder handler
+  // WhatsApp reminder handler (with preview)
+  const handleWhatsAppReminderWithPreview = (debt: Debt) => {
+    if (!debt.customer_phone) {
+      toast({ 
+        title: "No Phone Number", 
+        description: "This customer doesn't have a phone number on file.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Validate phone number
+    const phoneNumber = debt.customer_phone.replace(/[^\d]/g, '');
+    if (phoneNumber.length < 10) {
+      toast({ 
+        title: "Invalid Phone Number", 
+        description: "The phone number appears to be invalid.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setPreviewDebt(debt);
+    setPreviewDialogOpen(true);
+  };
+
+  // Execute WhatsApp send after preview confirmation
+  const handleConfirmWhatsAppSend = () => {
+    if (!previewDebt) return;
+
+    const balance = getBalance(previewDebt);
+    const messageData: DebtMessageData = {
+      customerName: previewDebt.customer_name,
+      customerPhone: previewDebt.customer_phone || '',
+      totalAmount: previewDebt.total_amount,
+      paidAmount: previewDebt.paid_amount,
+      balance,
+      businessName: businessName || 'My Business',
+      currencySymbol: currency.symbol,
+    };
+
+    // Generate message with debt date for overdue check
+    const message = generateDebtMessage(messageData, previewDebt.date);
+    const url = generateWhatsAppUrl(previewDebt.customer_phone || '', message);
+    
+    window.open(url, '_blank', 'noopener,noreferrer');
+    
+    // Log activity
+    console.log('[WhatsApp] Manual reminder sent for debt:', previewDebt.id);
+    
+    toast({ 
+      title: "WhatsApp Opened", 
+      description: "Review and send the message in WhatsApp." 
+    });
+
+    setPreviewDialogOpen(false);
+    setPreviewDebt(null);
+  };
+
+  // Legacy handler (direct send without preview - for post-payment popup)
   const handleWhatsAppReminder = (debt: Debt) => {
     if (!debt.customer_phone) {
       toast({ 
@@ -179,17 +241,20 @@ export default function DebtsPage() {
       totalAmount: debt.total_amount,
       paidAmount: debt.paid_amount,
       balance,
-      businessName,
+      businessName: businessName || 'My Business',
       currencySymbol: currency.symbol,
     };
 
-    const success = openWhatsAppReminder(messageData);
-    if (success) {
-      toast({ 
-        title: "WhatsApp Opened", 
-        description: "Review and send the message in WhatsApp." 
-      });
-    }
+    // Generate message with debt date for overdue check
+    const message = generateDebtMessage(messageData, debt.date);
+    const url = generateWhatsAppUrl(debt.customer_phone, message);
+    
+    window.open(url, '_blank', 'noopener,noreferrer');
+    
+    toast({ 
+      title: "WhatsApp Opened", 
+      description: "Review and send the message in WhatsApp." 
+    });
   };
 
   // New Debt handlers
@@ -596,9 +661,10 @@ export default function DebtsPage() {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleWhatsAppReminder(debt)}
+                    onClick={() => handleWhatsAppReminderWithPreview(debt)}
                     className="text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10"
                     title="Send WhatsApp Reminder"
+                    disabled={!debt.customer_phone}
                   >
                     <MessageCircle className="w-4 h-4 mr-1" />
                     Remind
@@ -904,8 +970,9 @@ export default function DebtsPage() {
           </Button>
           <Button 
             variant="outline" 
-            onClick={() => handleWhatsAppReminder(selectedDebt)}
+            onClick={() => handleWhatsAppReminderWithPreview(selectedDebt)}
             className="text-[#25D366] hover:text-[#25D366] hover:bg-[#25D366]/10"
+            disabled={!selectedDebt.customer_phone}
           >
             <MessageCircle className="w-4 h-4 mr-2" />
             WhatsApp Reminder
@@ -1170,6 +1237,23 @@ export default function DebtsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* WhatsApp Preview Dialog - Shows before manual send */}
+      <WhatsAppPreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        onConfirm={handleConfirmWhatsAppSend}
+        messageData={previewDebt ? {
+          customerName: previewDebt.customer_name,
+          customerPhone: previewDebt.customer_phone || '',
+          totalAmount: previewDebt.total_amount,
+          paidAmount: previewDebt.paid_amount,
+          balance: getBalance(previewDebt),
+          businessName: businessName || 'My Business',
+          currencySymbol: currency.symbol,
+        } : null}
+        debtDate={previewDebt?.date}
+      />
     </>
   );
 }
