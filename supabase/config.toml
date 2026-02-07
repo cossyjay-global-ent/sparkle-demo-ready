@@ -1,1 +1,4 @@
 project_id = "mtacrznsnbfumymmwjfi"
+
+[functions.process-debt-reminders]
+verify_jwt = false

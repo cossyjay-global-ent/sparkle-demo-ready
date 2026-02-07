@@ -133,6 +133,53 @@ export type Database = {
           },
         ]
       }
+      debt_reminders: {
+        Row: {
+          created_at: string
+          debt_id: string
+          id: string
+          reminder_day: number
+          scheduled_at: string
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          debt_id: string
+          id?: string
+          reminder_day: number
+          scheduled_at: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          debt_id?: string
+          id?: string
+          reminder_day?: number
+          scheduled_at?: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_reminders_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       debts: {
         Row: {
           created_at: string
