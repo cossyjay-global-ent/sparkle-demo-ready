@@ -1,15 +1,18 @@
 /**
  * UPGRADE PAGE
  * Shows subscription plans and benefits.
- * Paystack-ready for Nigeria payments.
+ * Integrated with Paystack for Nigeria payments.
  * 
  * DEVELOPER LIFETIME ACCESS – DO NOT REMOVE
  * Developer sees confirmation of lifetime access.
+ * 
+ * Phase 3A: Payments are recorded but do NOT auto-upgrade subscriptions.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { usePaystack } from '@/hooks/usePaystack';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +26,8 @@ import {
   Users,
   Clock,
   Shield,
-  Zap
+  Zap,
+  Loader2
 } from 'lucide-react';
 
 const plans = [
@@ -92,6 +96,8 @@ export default function Upgrade() {
   const navigate = useNavigate();
   const location = useLocation();
   const { plan: currentPlan, isDeveloper, isPro, isBusiness } = useSubscription();
+  const { initiatePayment, isLoading } = usePaystack();
+  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
   
   const requiredPlan = (location.state as any)?.requiredPlan;
   const fromPath = (location.state as any)?.from?.pathname;
@@ -141,12 +147,23 @@ export default function Upgrade() {
     );
   }
 
-  const handleUpgrade = (planId: string) => {
-    // TODO: Integrate Paystack payment
-    // This will be implemented when Paystack is connected
-    console.log('Upgrade to:', planId);
-    // For now, show coming soon message
-    alert('Payment integration coming soon! Contact support for manual upgrade.');
+  const handleUpgrade = async (planId: string) => {
+    if (planId === 'free') return;
+    
+    setProcessingPlan(planId);
+    
+    try {
+      const result = await initiatePayment(planId);
+      
+      if (result.success) {
+        console.log('[Upgrade] Payment successful:', result.reference);
+        // Phase 3A: Payment recorded, subscription upgrade will be in Phase 3B
+      }
+    } catch (error) {
+      console.error('[Upgrade] Payment error:', error);
+    } finally {
+      setProcessingPlan(null);
+    }
   };
 
   return (
@@ -232,10 +249,21 @@ export default function Upgrade() {
                   <Button 
                     className="w-full"
                     variant={isCurrentPlan ? 'outline' : planItem.popular ? 'default' : 'secondary'}
-                    disabled={isCurrentPlan || (planItem.id === 'free')}
+                    disabled={isCurrentPlan || (planItem.id === 'free') || isLoading}
                     onClick={() => handleUpgrade(planItem.id)}
                   >
-                    {isCurrentPlan ? 'Current Plan' : planItem.id === 'free' ? 'Free Forever' : 'Upgrade'}
+                    {processingPlan === planItem.id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : isCurrentPlan ? (
+                      'Current Plan'
+                    ) : planItem.id === 'free' ? (
+                      'Free Forever'
+                    ) : (
+                      'Upgrade'
+                    )}
                   </Button>
                 </CardContent>
               </Card>
