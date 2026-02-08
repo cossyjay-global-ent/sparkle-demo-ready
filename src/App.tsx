@@ -24,7 +24,7 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Upgrade from "./pages/Upgrade";
 import NotFound from "./pages/NotFound";
-import { useEffect } from "react";
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,39 +35,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Register service worker
-function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then((registration) => {
-          console.log('SW registered:', registration);
-          
-          // Check for updates
-          registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            if (newWorker) {
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // New version available
-                  console.log('New version available');
-                }
-              });
-            }
-          });
-        })
-        .catch((error) => {
-          console.log('SW registration failed:', error);
-        });
-    });
-  }
-}
 
 const App = () => {
-  useEffect(() => {
-    registerServiceWorker();
-  }, []);
-
   return (
     <ErrorBoundary>
       <BrowserRouter>
