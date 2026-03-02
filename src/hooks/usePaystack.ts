@@ -17,6 +17,9 @@ const PLAN_PRICES: Record<string, number> = {
   business: 1500000, // ₦15,000
 };
 
+// STABILITY-GUARD: Centralized Paystack key validation
+const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined;
+
 interface PaymentResult {
   success: boolean;
   reference?: string;
@@ -187,12 +190,11 @@ export function usePaystack() {
       return { success: false, message: 'Invalid plan' };
     }
 
-    const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-    if (!publicKey) {
+    if (!PAYSTACK_KEY) {
       console.error('[Paystack] Public key not configured');
       toast({
         title: 'Configuration Error',
-        description: 'Payment system is not properly configured. Please contact support.',
+        description: 'Payment system is not properly configured.',
         variant: 'destructive'
       });
       return { success: false, message: 'Paystack not configured' };
@@ -219,7 +221,7 @@ export function usePaystack() {
       // Return a promise that resolves when payment completes
       return new Promise((resolve) => {
         const handler = window.PaystackPop!.setup({
-          key: publicKey,
+          key: PAYSTACK_KEY,
           email: user.email!,
           amount,
           currency: 'NGN',

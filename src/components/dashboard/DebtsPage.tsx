@@ -119,9 +119,17 @@ export default function DebtsPage() {
   }, []);
 
   const loadData = async () => {
-    const [debtsData, customersData] = await Promise.all([getDebts(), getCustomers()]);
-    setDebts(debtsData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    setCustomers(customersData);
+    try {
+      const [debtsData, customersData] = await Promise.all([getDebts(), getCustomers()]);
+      const safeDebts = Array.isArray(debtsData) ? debtsData : [];
+      const safeCustomers = Array.isArray(customersData) ? customersData : [];
+      setDebts(safeDebts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      setCustomers(safeCustomers);
+    } catch (error) {
+      console.error('[Debts] Failed to load data:', error);
+      setDebts([]);
+      setCustomers([]);
+    }
   };
 
   const loadBusinessName = async () => {
@@ -156,12 +164,16 @@ export default function DebtsPage() {
   };
 
   const getStatus = (debt: Debt) => {
-    const balance = debt.total_amount - debt.paid_amount;
+    const total = Number(debt.total_amount) || 0;
+    const paid = Number(debt.paid_amount) || 0;
+    const balance = Math.max(0, total - paid);
     return balance <= 0 ? 'PAID' : 'UNPAID';
   };
 
   const getBalance = (debt: Debt) => {
-    return Math.max(0, debt.total_amount - debt.paid_amount);
+    const total = Number(debt.total_amount) || 0;
+    const paid = Number(debt.paid_amount) || 0;
+    return Math.max(0, total - paid);
   };
 
   // WhatsApp reminder handler (with preview)

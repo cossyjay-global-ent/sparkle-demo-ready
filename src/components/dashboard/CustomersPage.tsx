@@ -56,10 +56,17 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
   }, []);
 
   const loadData = async () => {
-    const [customersData, debtsData] = await Promise.all([getCustomers(), getDebts()]);
-    // Sort by created_at (ISO string from Supabase)
-    setCustomers(customersData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-    setDebts(debtsData);
+    try {
+      const [customersData, debtsData] = await Promise.all([getCustomers(), getDebts()]);
+      const safeCustomers = Array.isArray(customersData) ? customersData : [];
+      const safeDebts = Array.isArray(debtsData) ? debtsData : [];
+      setCustomers(safeCustomers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      setDebts(safeDebts);
+    } catch (error) {
+      console.error('[Customers] Failed to load data:', error);
+      setCustomers([]);
+      setDebts([]);
+    }
   };
 
   const resetForm = () => {
@@ -154,9 +161,9 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
 
   // Get customer debt info using snake_case fields from Supabase
   const getCustomerDebtInfo = (customerId: string) => {
-    const customerDebts = debts.filter(d => d.customer_id === customerId);
-    const totalAmount = customerDebts.reduce((sum, d) => sum + Number(d.total_amount), 0);
-    const paidAmount = customerDebts.reduce((sum, d) => sum + Number(d.paid_amount), 0);
+    const customerDebts = (debts || []).filter(d => d.customer_id === customerId);
+    const totalAmount = customerDebts.reduce((sum, d) => sum + (Number(d.total_amount) || 0), 0);
+    const paidAmount = customerDebts.reduce((sum, d) => sum + (Number(d.paid_amount) || 0), 0);
     const balance = Math.max(0, totalAmount - paidAmount);
     const status = balance <= 0 ? 'PAID' : 'UNPAID';
     const lastDebtDate = customerDebts.length > 0 
@@ -168,8 +175,8 @@ const CustomersPage = forwardRef<HTMLDivElement, {}>((props, ref) => {
     return { totalAmount, paidAmount, balance, status, lastDebtDate, debtCount: customerDebts.length };
   };
 
-  // Filter customers
-  const filteredCustomers = customers.filter(customer => {
+  // Filter customers - defensive guard against undefined
+  const filteredCustomers = (customers || []).filter(customer => {
     const query = searchQuery.toLowerCase();
     return (
       customer.name.toLowerCase().includes(query) ||
