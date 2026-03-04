@@ -57,6 +57,13 @@ interface PaystackConfig {
   onClose: () => void;
 }
 
+// Secure random hex string generation
+function secureRandomHex(length: number): string {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, length);
+}
+
 export function usePaystack() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -99,12 +106,41 @@ export function usePaystack() {
     });
   }, []);
 
-  // Generate unique reference
-  const generateReference = useCallback(() => {
+  // Generate secure unique reference: pay_{userId}_{timestamp}_{secureRandom}
+  const generateReference = useCallback((userId: string) => {
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    return `PAY-${timestamp}-${random}`;
+    const random = secureRandomHex(6);
+    return `pay_${userId.slice(0, 8)}_${timestamp}_${random}`;
   }, []);
+
+  // Check for existing pending payment to prevent duplicates
+  const findExistingPendingPayment = useCallback(async (
+    plan: string
+  ): Promise<string | null> => {
+    if (!user) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('payment_records')
+        .select('reference')
+        .eq('user_id', user.id)
+        .eq('plan', plan)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[Paystack] Error checking pending payments:', error);
+        return null;
+      }
+
+      return data?.reference ?? null;
+    } catch (err) {
+      console.error('[Paystack] Error in findExistingPendingPayment:', err);
+      return null;
+    }
+  }, [user]);
 
   // Create pending payment record
   const createPaymentRecord = useCallback(async (
@@ -210,12 +246,18 @@ export function usePaystack() {
         throw new Error('Paystack failed to initialize');
       }
 
-      const reference = generateReference();
+      // DUPLICATE PREVENTION: Check for existing pending payment for this plan
+      let reference = await findExistingPendingPayment(plan);
 
-      // Create pending payment record first
-      const recordCreated = await createPaymentRecord(plan, amount, reference);
-      if (!recordCreated) {
-        throw new Error('Failed to initialize payment');
+      if (reference) {
+        console.log('[Paystack] Reusing existing pending payment:', reference);
+      } else {
+        // Generate secure reference and create new record
+        reference = generateReference(user.id);
+        const recordCreated = await createPaymentRecord(plan, amount, reference);
+        if (!recordCreated) {
+          throw new Error('Failed to initialize payment');
+        }
       }
 
       // Return a promise that resolves when payment completes
@@ -225,7 +267,7 @@ export function usePaystack() {
           email: user.email!,
           amount,
           currency: 'NGN',
-          ref: reference,
+          ref: reference!,
           metadata: {
             plan,
             user_id: user.id
@@ -234,7 +276,7 @@ export function usePaystack() {
             console.log('[Paystack] Payment successful:', response);
             
             // Update payment record to success
-            await updatePaymentStatus(reference, 'success', response.reference);
+            await updatePaymentStatus(reference!, 'success', response.reference);
             
             toast({
               title: 'Payment Successful!',
@@ -247,21 +289,24 @@ export function usePaystack() {
           onClose: async () => {
             console.log('[Paystack] Payment dialog closed');
             
-            // Check if payment was completed before closing
-            // If not, mark as cancelled
-            const { data } = await supabase
-              .from('payment_records')
-              .select('status')
-              .eq('reference', reference)
-              .single();
+            // ABANDONED PAYMENT HANDLING: resolve pending to cancelled
+            try {
+              const { data } = await supabase
+                .from('payment_records')
+                .select('status')
+                .eq('reference', reference!)
+                .single();
 
-            if (data?.status === 'pending') {
-              await updatePaymentStatus(reference, 'cancelled');
-              toast({
-                title: 'Payment Cancelled',
-                description: 'You cancelled the payment. No charges were made.',
-                variant: 'destructive'
-              });
+              if (data?.status === 'pending') {
+                await updatePaymentStatus(reference!, 'cancelled');
+                toast({
+                  title: 'Payment Cancelled',
+                  description: 'You cancelled the payment. No charges were made.',
+                  variant: 'destructive'
+                });
+              }
+            } catch (err) {
+              console.error('[Paystack] Error resolving abandoned payment:', err);
             }
             
             setIsLoading(false);
@@ -284,7 +329,7 @@ export function usePaystack() {
       
       return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
     }
-  }, [user, toast, loadPaystackScript, generateReference, createPaymentRecord, updatePaymentStatus]);
+  }, [user, toast, loadPaystackScript, generateReference, findExistingPendingPayment, createPaymentRecord, updatePaymentStatus]);
 
   return {
     initiatePayment,
