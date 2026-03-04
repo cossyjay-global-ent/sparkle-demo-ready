@@ -2,3 +2,6 @@ project_id = "mtacrznsnbfumymmwjfi"
 
 [functions.process-debt-reminders]
 verify_jwt = false
+
+[functions.paystack-webhook]
+verify_jwt = false
