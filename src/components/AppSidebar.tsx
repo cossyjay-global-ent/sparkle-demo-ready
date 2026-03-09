@@ -30,7 +30,8 @@ import {
   Download,
   ChevronDown,
   Crown,
-  Lock
+  Lock,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
