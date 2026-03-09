@@ -21,6 +21,7 @@ import {
   Info,
   Lock,
   Coins,
+  Receipt,
   Eye,
   EyeOff,
   Check
