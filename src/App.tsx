@@ -23,6 +23,7 @@ import Support from "./pages/Support";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Upgrade from "./pages/Upgrade";
+import Billing from "./pages/Billing";
 import NotFound from "./pages/NotFound";
 
 
