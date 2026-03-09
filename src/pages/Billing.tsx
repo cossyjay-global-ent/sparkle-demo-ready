@@ -213,6 +213,17 @@ export default function Billing() {
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {formatDate(record.created_at)}
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => downloadReceipt(record, user?.email || '-')}
+                            title="Download receipt"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
