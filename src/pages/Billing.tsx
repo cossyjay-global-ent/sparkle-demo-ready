@@ -190,6 +190,7 @@ export default function Billing() {
                       <TableHead>Status</TableHead>
                       <TableHead>Reference</TableHead>
                       <TableHead>Date</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
