@@ -30,7 +30,8 @@ import {
   Download,
   ChevronDown,
   Crown,
-  Lock
+  Lock,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/contexts/RBACContext';
@@ -165,6 +166,7 @@ export const AppSidebar = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   const secondaryNavItems = [
     { path: '/settings', label: 'Settings', icon: Settings, show: true, locked: false },
     { path: '/profile', label: 'Profile', icon: User, show: true, locked: false },
+    { path: '/billing', label: 'Billing History', icon: FileText, show: true, locked: false },
     { path: '/upgrade', label: 'Upgrade', icon: Crown, show: !isDeveloper && !isBusiness, locked: false },
     { path: '/install', label: 'Install App', icon: Download, show: !isStandalone && canInstall, locked: false },
     { path: '/support', label: 'Help & Support', icon: HelpCircle, show: true, locked: false },
