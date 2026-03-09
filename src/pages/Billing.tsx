@@ -73,6 +73,51 @@ function getStatusColor(status: string): string {
   }
 }
 
+function downloadReceipt(record: PaymentRecord, userEmail: string) {
+  try {
+    const amount = formatAmount(record.amount, record.currency || 'NGN');
+    const date = formatDate(record.created_at);
+    const status = (record.status || 'unknown').toUpperCase();
+    const plan = (record.plan || '-').charAt(0).toUpperCase() + (record.plan || '-').slice(1);
+
+    const receiptContent = `
+════════════════════════════════════════
+              PAYMENT RECEIPT
+════════════════════════════════════════
+
+Date:        ${date}
+Reference:   ${record.reference || '-'}
+
+────────────────────────────────────────
+Plan:        ${plan}
+Amount:      ${amount}
+Currency:    ${record.currency || 'NGN'}
+Status:      ${status}
+────────────────────────────────────────
+
+Billed To:   ${userEmail}
+
+════════════════════════════════════════
+         Thank you for your payment!
+════════════════════════════════════════
+`.trim();
+
+    const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-${record.reference || record.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success('Receipt downloaded');
+  } catch {
+    toast.error('Failed to download receipt');
+  }
+}
+
 export default function Billing() {
   const { user } = useAuth();
   const navigate = useNavigate();
