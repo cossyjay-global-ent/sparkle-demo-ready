@@ -82,6 +82,11 @@ const App = () => {
                                 <Profile />
                               </ProtectedRoute>
                             } />
+                            <Route path="/billing" element={
+                              <ProtectedRoute>
+                                <Billing />
+                              </ProtectedRoute>
+                            } />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                         </CloudDataProvider>
