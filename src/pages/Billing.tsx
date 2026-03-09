@@ -14,8 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Receipt } from 'lucide-react';
+import { ArrowLeft, Download, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from '@/components/ui/sonner';
 
 interface PaymentRecord {
   id: string;
