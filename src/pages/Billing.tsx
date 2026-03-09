@@ -14,8 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Receipt } from 'lucide-react';
+import { ArrowLeft, Download, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from '@/components/ui/sonner';
 
 interface PaymentRecord {
   id: string;
@@ -69,6 +70,51 @@ function getStatusColor(status: string): string {
       return 'bg-muted text-muted-foreground border-border';
     default:
       return '';
+  }
+}
+
+function downloadReceipt(record: PaymentRecord, userEmail: string) {
+  try {
+    const amount = formatAmount(record.amount, record.currency || 'NGN');
+    const date = formatDate(record.created_at);
+    const status = (record.status || 'unknown').toUpperCase();
+    const plan = (record.plan || '-').charAt(0).toUpperCase() + (record.plan || '-').slice(1);
+
+    const receiptContent = `
+════════════════════════════════════════
+              PAYMENT RECEIPT
+════════════════════════════════════════
+
+Date:        ${date}
+Reference:   ${record.reference || '-'}
+
+────────────────────────────────────────
+Plan:        ${plan}
+Amount:      ${amount}
+Currency:    ${record.currency || 'NGN'}
+Status:      ${status}
+────────────────────────────────────────
+
+Billed To:   ${userEmail}
+
+════════════════════════════════════════
+         Thank you for your payment!
+════════════════════════════════════════
+`.trim();
+
+    const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-${record.reference || record.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success('Receipt downloaded');
+  } catch {
+    toast.error('Failed to download receipt');
   }
 }
 
@@ -144,6 +190,7 @@ export default function Billing() {
                       <TableHead>Status</TableHead>
                       <TableHead>Reference</TableHead>
                       <TableHead>Date</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -165,6 +212,17 @@ export default function Billing() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {formatDate(record.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => downloadReceipt(record, user?.email || '-')}
+                            title="Download receipt"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
