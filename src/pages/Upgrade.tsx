@@ -314,8 +314,15 @@ export default function Upgrade() {
           </div>
         </div>
 
-        {/* Contact */}
-        <div className="text-center mt-8">
+        {/* Billing History */}
+        <div className="text-center mt-8 space-y-4">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/billing')}
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            View Billing History
+          </Button>
           <p className="text-sm text-muted-foreground">
             Have questions? Contact us at support@example.com
           </p>

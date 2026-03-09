@@ -21,6 +21,7 @@ import {
   Info,
   Lock,
   Coins,
+  Receipt,
   Eye,
   EyeOff,
   Check
@@ -256,6 +257,35 @@ const Settings = () => {
                 </div>
                 <Switch checked={autoSync} onCheckedChange={setAutoSync} />
               </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Billing */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-semibold text-foreground">Billing</h2>
+          </div>
+          
+          <Card className="card-glass">
+            <CardContent className="pt-6 space-y-4">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/billing')}
+              >
+                <Receipt className="w-4 h-4 mr-3" />
+                View Billing History
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/upgrade')}
+              >
+                <Coins className="w-4 h-4 mr-3" />
+                Manage Subscription
+              </Button>
             </CardContent>
           </Card>
         </section>

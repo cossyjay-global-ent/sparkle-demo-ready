@@ -258,9 +258,12 @@ const Profile = () => {
         </section>
 
         {/* Quick Actions */}
-        <section className="grid grid-cols-2 gap-4 pt-4">
+        <section className="grid grid-cols-3 gap-4 pt-4">
           <Button variant="outline" onClick={() => navigate('/settings')} className="h-auto py-4">
             Settings
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/billing')} className="h-auto py-4">
+            Billing
           </Button>
           <Button variant="outline" onClick={() => navigate('/dashboard')} className="h-auto py-4">
             Dashboard
