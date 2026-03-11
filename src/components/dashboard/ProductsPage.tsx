@@ -166,9 +166,13 @@ export default function ProductsPage() {
   };
 
   const totalProducts = products.length;
-  const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
+  const totalStock = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
   // Stock value calculated from cost price (inventory investment value)
-  const totalValue = products.reduce((sum, p) => sum + (p.cost_price * p.stock), 0);
+  const totalValue = products.reduce((sum, p) => {
+    const cost = Number(p.cost_price || 0);
+    const stockQty = Number(p.stock || 0);
+    return sum + (cost * stockQty);
+  }, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
