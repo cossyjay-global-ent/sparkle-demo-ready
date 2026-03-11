@@ -333,7 +333,7 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Profit</p>
-                  <p className="font-medium text-success">{currencySymbol}{(product.selling_price - product.cost_price).toLocaleString()}</p>
+                  <p className="font-medium text-success">{currencySymbol}{((Number(product.selling_price) || 0) - (Number(product.cost_price) || 0)).toLocaleString()}</p>
                 </div>
               </div>
             </Card>
