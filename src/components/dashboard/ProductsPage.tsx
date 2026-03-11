@@ -166,9 +166,13 @@ export default function ProductsPage() {
   };
 
   const totalProducts = products.length;
-  const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
+  const totalStock = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
   // Stock value calculated from cost price (inventory investment value)
-  const totalValue = products.reduce((sum, p) => sum + (p.cost_price * p.stock), 0);
+  const totalValue = products.reduce((sum, p) => {
+    const cost = Number(p.cost_price || 0);
+    const stockQty = Number(p.stock || 0);
+    return sum + (cost * stockQty);
+  }, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -317,19 +321,19 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Cost</p>
-                  <p className="font-medium">{currencySymbol}{product.cost_price.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{(Number(product.cost_price) || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">{currencySymbol}{product.selling_price.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{(Number(product.selling_price) || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
-                  <p className={`font-medium ${product.stock < 10 ? 'text-warning' : ''}`}>{product.stock}</p>
+                  <p className={`font-medium ${(Number(product.stock) || 0) < 10 ? 'text-warning' : ''}`}>{Number(product.stock) || 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Profit</p>
-                  <p className="font-medium text-success">{currencySymbol}{(product.selling_price - product.cost_price).toLocaleString()}</p>
+                  <p className="font-medium text-success">{currencySymbol}{((Number(product.selling_price) || 0) - (Number(product.cost_price) || 0)).toLocaleString()}</p>
                 </div>
               </div>
             </Card>
