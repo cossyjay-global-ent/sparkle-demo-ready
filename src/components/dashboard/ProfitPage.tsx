@@ -309,9 +309,9 @@ export default function ProfitPage() {
   const todayProfit = allSales.filter(s => {
     const saleDate = new Date(s.date).getTime();
     return saleDate >= todayStart && saleDate <= todayEndTimestamp;
-  }).reduce((sum, s) => sum + s.profit, 0);
-  const weekProfit = allSales.filter(s => new Date(s.date).getTime() >= weekStart).reduce((sum, s) => sum + s.profit, 0);
-  const monthProfit = allSales.filter(s => new Date(s.date).getTime() >= monthStart).reduce((sum, s) => sum + s.profit, 0);
+  }).reduce((sum, s) => sum + (Number(s.profit) || 0), 0);
+  const weekProfit = allSales.filter(s => new Date(s.date).getTime() >= weekStart).reduce((sum, s) => sum + (Number(s.profit) || 0), 0);
+  const monthProfit = allSales.filter(s => new Date(s.date).getTime() >= monthStart).reduce((sum, s) => sum + (Number(s.profit) || 0), 0);
 
   const formatDate = (dateValue: string | number) => {
     const date = typeof dateValue === 'string' ? new Date(dateValue) : new Date(dateValue);
