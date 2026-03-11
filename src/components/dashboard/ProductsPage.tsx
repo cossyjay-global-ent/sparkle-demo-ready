@@ -325,7 +325,7 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">{currencySymbol}{product.selling_price.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{(Number(product.selling_price) || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
