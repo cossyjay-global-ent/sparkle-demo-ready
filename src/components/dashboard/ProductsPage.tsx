@@ -321,7 +321,7 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Cost</p>
-                  <p className="font-medium">{currencySymbol}{product.cost_price.toLocaleString()}</p>
+                  <p className="font-medium">{currencySymbol}{(Number(product.cost_price) || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Price</p>
