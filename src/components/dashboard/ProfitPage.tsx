@@ -290,8 +290,8 @@ export default function ProfitPage() {
   });
 
   // 🔒 NON-NEGOTIABLE: Profit = Sales - Expenses
-  const totalProfit = filteredSales.reduce((sum, s) => sum + s.profit, 0);
-  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalProfit = filteredSales.reduce((sum, s) => sum + (Number(s.profit) || 0), 0);
+  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const netProfit = totalProfit - totalExpensesAmount;
 
   // Calculate by period (for quick reference cards - ALWAYS based on actual dates)
