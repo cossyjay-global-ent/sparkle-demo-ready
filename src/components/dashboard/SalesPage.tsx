@@ -217,7 +217,7 @@ export default function SalesPage() {
     await deleteSale(id);
   };
 
-  const totalSales = sales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+  const totalSales = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-NG', {
