@@ -329,7 +329,7 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
-                  <p className={`font-medium ${product.stock < 10 ? 'text-warning' : ''}`}>{product.stock}</p>
+                  <p className={`font-medium ${(Number(product.stock) || 0) < 10 ? 'text-warning' : ''}`}>{Number(product.stock) || 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Profit</p>
