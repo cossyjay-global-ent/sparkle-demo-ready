@@ -285,7 +285,7 @@ export function usePaystack() {
       // Return a promise that resolves when payment completes
       return new Promise((resolve) => {
         const handler = window.PaystackPop!.setup({
-          key: PAYSTACK_KEY,
+          key: paystackKey,
           email: user.email!,
           amount,
           currency: 'NGN',
