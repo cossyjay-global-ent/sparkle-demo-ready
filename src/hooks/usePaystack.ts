@@ -17,8 +17,28 @@ const PLAN_PRICES: Record<string, number> = {
   business: 1500000, // ₦15,000
 };
 
-// STABILITY-GUARD: Centralized Paystack key validation
-const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined;
+// Paystack key is fetched at runtime from the backend
+let cachedPaystackKey: string | null = null;
+
+async function fetchPaystackKey(): Promise<string | null> {
+  if (cachedPaystackKey) return cachedPaystackKey;
+
+  try {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data, error } = await supabase.functions.invoke('get-paystack-key');
+
+    if (error || !data?.key) {
+      console.error('[Paystack] Failed to fetch public key:', error || 'No key returned');
+      return null;
+    }
+
+    cachedPaystackKey = data.key;
+    return cachedPaystackKey;
+  } catch (err) {
+    console.error('[Paystack] Error fetching Paystack key:', err);
+    return null;
+  }
+}
 
 interface PaymentResult {
   success: boolean;
@@ -226,8 +246,10 @@ export function usePaystack() {
       return { success: false, message: 'Invalid plan' };
     }
 
-    if (!PAYSTACK_KEY) {
-      console.error('[Paystack] Public key not configured');
+    // Fetch Paystack key from backend
+    const paystackKey = await fetchPaystackKey();
+    if (!paystackKey) {
+      console.error('[Paystack] Paystack public key missing. Check VITE_PAYSTACK_PUBLIC_KEY secret.');
       toast({
         title: 'Configuration Error',
         description: 'Payment system is not properly configured.',
@@ -263,7 +285,7 @@ export function usePaystack() {
       // Return a promise that resolves when payment completes
       return new Promise((resolve) => {
         const handler = window.PaystackPop!.setup({
-          key: PAYSTACK_KEY,
+          key: paystackKey,
           email: user.email!,
           amount,
           currency: 'NGN',
