@@ -35,9 +35,7 @@ async function fetchPaystackKey(): Promise<string | null> {
     let error: Error | null = null;
 
     try {
-      const result = await supabase.functions.invoke('get-paystack-key', {
-        headers: { signal: controller.signal } as unknown as Record<string, string>,
-      });
+      const result = await supabase.functions.invoke('get-paystack-key');
       data = result.data;
       error = result.error as Error | null;
     } finally {
