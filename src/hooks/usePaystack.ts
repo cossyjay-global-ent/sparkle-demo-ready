@@ -17,8 +17,28 @@ const PLAN_PRICES: Record<string, number> = {
   business: 1500000, // ₦15,000
 };
 
-// STABILITY-GUARD: Centralized Paystack key validation
-const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string | undefined;
+// Paystack key is fetched at runtime from the backend
+let cachedPaystackKey: string | null = null;
+
+async function fetchPaystackKey(): Promise<string | null> {
+  if (cachedPaystackKey) return cachedPaystackKey;
+
+  try {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const { data, error } = await supabase.functions.invoke('get-paystack-key');
+
+    if (error || !data?.key) {
+      console.error('[Paystack] Failed to fetch public key:', error || 'No key returned');
+      return null;
+    }
+
+    cachedPaystackKey = data.key;
+    return cachedPaystackKey;
+  } catch (err) {
+    console.error('[Paystack] Error fetching Paystack key:', err);
+    return null;
+  }
+}
 
 interface PaymentResult {
   success: boolean;
