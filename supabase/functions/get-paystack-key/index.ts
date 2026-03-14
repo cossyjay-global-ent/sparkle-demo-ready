@@ -21,6 +21,15 @@ serve(async (req) => {
       );
     }
 
+    // Safety: never expose secret keys — only return keys starting with "pk_"
+    if (!key.startsWith("pk_")) {
+      console.error("[get-paystack-key] Key does not appear to be a public key");
+      return new Response(
+        JSON.stringify({ error: "Invalid key configuration" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ key }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

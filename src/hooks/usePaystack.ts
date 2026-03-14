@@ -19,23 +19,52 @@ const PLAN_PRICES: Record<string, number> = {
 
 // Paystack key is fetched at runtime from the backend
 let cachedPaystackKey: string | null = null;
+const FETCH_TIMEOUT_MS = 10000;
 
 async function fetchPaystackKey(): Promise<string | null> {
   if (cachedPaystackKey) return cachedPaystackKey;
 
   try {
     const { supabase } = await import('@/integrations/supabase/client');
-    const { data, error } = await supabase.functions.invoke('get-paystack-key');
+
+    // Timeout guard: abort if key fetch takes too long
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    let data: Record<string, unknown> | null = null;
+    let error: Error | null = null;
+
+    try {
+      const result = await supabase.functions.invoke('get-paystack-key', {
+        headers: { signal: controller.signal } as unknown as Record<string, string>,
+      });
+      data = result.data;
+      error = result.error as Error | null;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (error || !data?.key) {
-      console.error('[Paystack] Failed to fetch public key:', error || 'No key returned');
+      console.error('[Paystack] Paystack public key could not be loaded.', error || 'No key returned');
       return null;
     }
 
-    cachedPaystackKey = data.key;
+    const key = data.key as string;
+
+    // Key validation: must be a string starting with "pk_" and reasonable length
+    if (typeof key !== 'string' || !key.startsWith('pk_') || key.length < 10 || key.length > 100) {
+      console.error('[Paystack] Paystack public key failed validation — invalid format.');
+      return null;
+    }
+
+    cachedPaystackKey = key;
     return cachedPaystackKey;
   } catch (err) {
-    console.error('[Paystack] Error fetching Paystack key:', err);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('[Paystack] Paystack public key fetch timed out.');
+    } else {
+      console.error('[Paystack] Paystack public key could not be loaded.', err);
+    }
     return null;
   }
 }
