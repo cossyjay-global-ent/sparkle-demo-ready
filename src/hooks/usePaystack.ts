@@ -246,8 +246,10 @@ export function usePaystack() {
       return { success: false, message: 'Invalid plan' };
     }
 
-    if (!PAYSTACK_KEY) {
-      console.error('[Paystack] Public key not configured');
+    // Fetch Paystack key from backend
+    const paystackKey = await fetchPaystackKey();
+    if (!paystackKey) {
+      console.error('[Paystack] Paystack public key missing. Check VITE_PAYSTACK_PUBLIC_KEY secret.');
       toast({
         title: 'Configuration Error',
         description: 'Payment system is not properly configured.',
