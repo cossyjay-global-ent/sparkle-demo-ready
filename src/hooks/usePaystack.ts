@@ -321,11 +321,11 @@ export function usePaystack() {
             plan,
             user_id: user.id
           },
-          callback: async (response: PaystackResponse) => {
+          callback: (response: PaystackResponse) => {
             console.log('[Paystack] Payment successful:', response);
             
-            // Update payment record to success
-            await updatePaymentStatus(reference!, 'success', response.reference);
+            // Update payment record to success (fire-and-forget)
+            updatePaymentStatus(reference!, 'success', response.reference);
             
             toast({
               title: 'Payment Successful!',
@@ -335,28 +335,28 @@ export function usePaystack() {
             setIsLoading(false);
             resolve({ success: true, reference: response.reference });
           },
-          onClose: async () => {
+          onClose: () => {
             console.log('[Paystack] Payment dialog closed');
             
-            // ABANDONED PAYMENT HANDLING: resolve pending to cancelled
-            try {
-              const { data } = await supabase
+            // ABANDONED PAYMENT HANDLING: resolve pending to cancelled (fire-and-forget)
+            Promise.resolve(
+              supabase
                 .from('payment_records')
                 .select('status')
                 .eq('reference', reference!)
-                .single();
-
+                .single()
+            ).then(({ data }) => {
               if (data?.status === 'pending') {
-                await updatePaymentStatus(reference!, 'cancelled');
+                updatePaymentStatus(reference!, 'cancelled');
                 toast({
                   title: 'Payment Cancelled',
                   description: 'You cancelled the payment. No charges were made.',
                   variant: 'destructive'
                 });
               }
-            } catch (err) {
+            }).catch((err) => {
               console.error('[Paystack] Error resolving abandoned payment:', err);
-            }
+            });
             
             setIsLoading(false);
             resolve({ success: false, message: 'Payment cancelled' });
