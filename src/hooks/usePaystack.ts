@@ -111,6 +111,28 @@ function secureRandomHex(length: number): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, length);
 }
 
+// Detect if running inside a restricted WebView (Capacitor, Cordova, etc.)
+function isRestrictedWebView(): boolean {
+  const ua = navigator.userAgent || '';
+  // Capacitor or Cordova wrapper
+  if ((window as any).Capacitor || (window as any).cordova) return true;
+  // Android WebView
+  if (/wv/.test(ua) && /Android/.test(ua)) return true;
+  // Generic WebView indicators
+  if (/WebView/.test(ua)) return true;
+  return false;
+}
+
+// Open URL in system browser when inside a WebView
+function openInSystemBrowser(url: string): void {
+  if ((window as any).Capacitor?.Plugins?.Browser) {
+    (window as any).Capacitor.Plugins.Browser.open({ url });
+  } else {
+    // Fallback: window.open with _system target (Cordova InAppBrowser convention)
+    window.open(url, '_system');
+  }
+}
+
 export function usePaystack() {
   const { user } = useAuth();
   const { toast } = useToast();
