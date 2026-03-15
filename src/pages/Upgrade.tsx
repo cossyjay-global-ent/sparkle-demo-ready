@@ -149,9 +149,15 @@ export default function Upgrade() {
     );
   }
 
-  const handleUpgrade = async (planId: string) => {
+  const handleUpgradeClick = (planId: string) => {
     if (planId === 'free') return;
-    
+    setConfirmPlan(planId);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!confirmPlan) return;
+    const planId = confirmPlan;
+    setConfirmPlan(null);
     setProcessingPlan(planId);
     
     try {
