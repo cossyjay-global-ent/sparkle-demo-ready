@@ -258,7 +258,7 @@ export default function Upgrade() {
                     className="w-full"
                     variant={isCurrentPlan ? 'outline' : planItem.popular ? 'default' : 'secondary'}
                     disabled={isCurrentPlan || (planItem.id === 'free') || isLoading}
-                    onClick={() => handleUpgrade(planItem.id)}
+                    onClick={() => handleUpgradeClick(planItem.id)}
                   >
                     {processingPlan === planItem.id ? (
                       <>
