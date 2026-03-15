@@ -99,6 +99,7 @@ export default function Upgrade() {
   const { plan: currentPlan, isDeveloper, isPro, isBusiness } = useSubscription();
   const { initiatePayment, isLoading } = usePaystack();
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<string | null>(null);
   
   const requiredPlan = (location.state as any)?.requiredPlan;
   const fromPath = (location.state as any)?.from?.pathname;
