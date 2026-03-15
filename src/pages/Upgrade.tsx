@@ -29,6 +29,7 @@ import {
   Zap,
   Loader2
 } from 'lucide-react';
+import { PaymentConfirmDialog } from '@/components/upgrade/PaymentConfirmDialog';
 
 const plans = [
   {
