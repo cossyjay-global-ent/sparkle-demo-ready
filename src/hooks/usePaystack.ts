@@ -339,24 +339,24 @@ export function usePaystack() {
             console.log('[Paystack] Payment dialog closed');
             
             // ABANDONED PAYMENT HANDLING: resolve pending to cancelled (fire-and-forget)
-            supabase
-              .from('payment_records')
-              .select('status')
-              .eq('reference', reference!)
-              .single()
-              .then(({ data }) => {
-                if (data?.status === 'pending') {
-                  updatePaymentStatus(reference!, 'cancelled');
-                  toast({
-                    title: 'Payment Cancelled',
-                    description: 'You cancelled the payment. No charges were made.',
-                    variant: 'destructive'
-                  });
-                }
-              })
-              .catch((err) => {
-                console.error('[Paystack] Error resolving abandoned payment:', err);
-              });
+            Promise.resolve(
+              supabase
+                .from('payment_records')
+                .select('status')
+                .eq('reference', reference!)
+                .single()
+            ).then(({ data }) => {
+              if (data?.status === 'pending') {
+                updatePaymentStatus(reference!, 'cancelled');
+                toast({
+                  title: 'Payment Cancelled',
+                  description: 'You cancelled the payment. No charges were made.',
+                  variant: 'destructive'
+                });
+              }
+            }).catch((err) => {
+              console.error('[Paystack] Error resolving abandoned payment:', err);
+            });
             
             setIsLoading(false);
             resolve({ success: false, message: 'Payment cancelled' });
