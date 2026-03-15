@@ -24,6 +24,8 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Upgrade from "./pages/Upgrade";
 import Billing from "./pages/Billing";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 
 
@@ -87,6 +89,8 @@ const App = () => {
                                 <Billing />
                               </ProtectedRoute>
                             } />
+                            <Route path="/privacy" element={<Privacy />} />
+                            <Route path="/terms" element={<Terms />} />
                             <Route path="*" element={<NotFound />} />
                           </Routes>
                         </CloudDataProvider>

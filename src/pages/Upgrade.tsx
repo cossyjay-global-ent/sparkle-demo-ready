@@ -29,6 +29,7 @@ import {
   Zap,
   Loader2
 } from 'lucide-react';
+import { PaymentConfirmDialog } from '@/components/upgrade/PaymentConfirmDialog';
 
 const plans = [
   {
@@ -98,6 +99,7 @@ export default function Upgrade() {
   const { plan: currentPlan, isDeveloper, isPro, isBusiness } = useSubscription();
   const { initiatePayment, isLoading } = usePaystack();
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<string | null>(null);
   
   const requiredPlan = (location.state as any)?.requiredPlan;
   const fromPath = (location.state as any)?.from?.pathname;
@@ -147,9 +149,15 @@ export default function Upgrade() {
     );
   }
 
-  const handleUpgrade = async (planId: string) => {
+  const handleUpgradeClick = (planId: string) => {
     if (planId === 'free') return;
-    
+    setConfirmPlan(planId);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!confirmPlan) return;
+    const planId = confirmPlan;
+    setConfirmPlan(null);
     setProcessingPlan(planId);
     
     try {
@@ -250,7 +258,7 @@ export default function Upgrade() {
                     className="w-full"
                     variant={isCurrentPlan ? 'outline' : planItem.popular ? 'default' : 'secondary'}
                     disabled={isCurrentPlan || (planItem.id === 'free') || isLoading}
-                    onClick={() => handleUpgrade(planItem.id)}
+                    onClick={() => handleUpgradeClick(planItem.id)}
                   >
                     {processingPlan === planItem.id ? (
                       <>
@@ -327,6 +335,14 @@ export default function Upgrade() {
             Have questions? Contact us at support@example.com
           </p>
         </div>
+
+        <PaymentConfirmDialog
+          open={!!confirmPlan}
+          onOpenChange={(open) => { if (!open) setConfirmPlan(null); }}
+          planId={confirmPlan}
+          onConfirm={handleConfirmPayment}
+          isLoading={isLoading}
+        />
       </div>
     </div>
   );
