@@ -379,6 +379,35 @@ const Settings = () => {
           </Card>
         </section>
 
+        {/* Legal */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-semibold text-foreground">Legal</h2>
+          </div>
+          
+          <Card className="card-glass">
+            <CardContent className="pt-6 space-y-4">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/privacy')}
+              >
+                <Shield className="w-4 h-4 mr-3" />
+                Privacy Policy
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => navigate('/terms')}
+              >
+                <Info className="w-4 h-4 mr-3" />
+                Terms of Service
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* Quick Links */}
         <section className="grid grid-cols-2 gap-4 pt-4">
           <Button variant="outline" onClick={() => navigate('/about')} className="h-auto py-4">

@@ -335,6 +335,14 @@ export default function Upgrade() {
             Have questions? Contact us at support@example.com
           </p>
         </div>
+
+        <PaymentConfirmDialog
+          open={!!confirmPlan}
+          onOpenChange={(open) => { if (!open) setConfirmPlan(null); }}
+          planId={confirmPlan}
+          onConfirm={handleConfirmPayment}
+          isLoading={isLoading}
+        />
       </div>
     </div>
   );
