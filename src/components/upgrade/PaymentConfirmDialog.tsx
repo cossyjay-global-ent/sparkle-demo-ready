@@ -82,8 +82,11 @@ export function PaymentConfirmDialog({
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            You will be redirected to a secure payment page to complete your purchase.
-            By proceeding, you agree to our{' '}
+            This subscription renews automatically unless cancelled. You can manage or cancel your subscription through your billing account.
+          </p>
+
+          <p className="text-xs text-muted-foreground text-center">
+            You will be redirected to a secure payment page. By proceeding, you agree to our{' '}
             <a
               href="https://sparkle-demo-ready.lovable.app/terms"
               target="_blank"
