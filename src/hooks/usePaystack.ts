@@ -133,11 +133,20 @@ function openInSystemBrowser(url: string): void {
   }
 }
 
+// Module-level guard: only one payment flow at a time across all instances
+let globalPaymentProcessing = false;
+
 export function usePaystack() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+
+  // Sync local state with global guard
+  const setProcessing = useCallback((value: boolean) => {
+    globalPaymentProcessing = value;
+    setIsLoading(value);
+  }, []);
 
   // Load Paystack script dynamically
   const loadPaystackScript = useCallback((): Promise<void> => {
