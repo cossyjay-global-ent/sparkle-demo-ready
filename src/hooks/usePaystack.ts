@@ -133,11 +133,20 @@ function openInSystemBrowser(url: string): void {
   }
 }
 
+// Module-level guard: only one payment flow at a time across all instances
+let globalPaymentProcessing = false;
+
 export function usePaystack() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
+
+  // Sync local state with global guard
+  const setProcessing = useCallback((value: boolean) => {
+    globalPaymentProcessing = value;
+    setIsLoading(value);
+  }, []);
 
   // Load Paystack script dynamically
   const loadPaystackScript = useCallback((): Promise<void> => {
@@ -276,6 +285,12 @@ export function usePaystack() {
 
   // Initiate payment
   const initiatePayment = useCallback(async (plan: string): Promise<PaymentResult> => {
+    // GUARD: Prevent multiple concurrent payment flows
+    if (globalPaymentProcessing) {
+      console.warn('[Paystack] Payment already in progress, blocking duplicate attempt.');
+      return { success: false, message: 'Payment already in progress' };
+    }
+
     if (!user || !user.email) {
       toast({
         title: 'Error',
@@ -295,21 +310,22 @@ export function usePaystack() {
       return { success: false, message: 'Invalid plan' };
     }
 
-    // Fetch Paystack key from backend
-    const paystackKey = await fetchPaystackKey();
-    if (!paystackKey) {
-      console.error('[Paystack] Paystack public key missing. Check VITE_PAYSTACK_PUBLIC_KEY secret.');
-      toast({
-        title: 'Configuration Error',
-        description: 'Payment system is not properly configured.',
-        variant: 'destructive'
-      });
-      return { success: false, message: 'Paystack not configured' };
-    }
-
-    setIsLoading(true);
+    setProcessing(true);
 
     try {
+      // Fetch Paystack key from backend
+      const paystackKey = await fetchPaystackKey();
+      if (!paystackKey) {
+        console.error('[Paystack] Paystack public key missing. Check VITE_PAYSTACK_PUBLIC_KEY secret.');
+        toast({
+          title: 'Configuration Error',
+          description: 'Payment system is not properly configured.',
+          variant: 'destructive'
+        });
+        setProcessing(false);
+        return { success: false, message: 'Paystack not configured' };
+      }
+
       // Load Paystack script if not already loaded
       await loadPaystackScript();
 
@@ -333,64 +349,75 @@ export function usePaystack() {
 
       // Return a promise that resolves when payment completes
       return new Promise((resolve) => {
-        const handler = window.PaystackPop!.setup({
-          key: paystackKey,
-          email: user.email!,
-          amount,
-          currency: 'NGN',
-          ref: reference!,
-          metadata: {
-            plan,
-            user_id: user.id
-          },
-          callback: (response: PaystackResponse) => {
-            console.log('[Paystack] Payment successful:', response);
-            
-            // Update payment record to success (fire-and-forget)
-            updatePaymentStatus(reference!, 'success', response.reference);
-            
-            toast({
-              title: 'Payment Successful!',
-              description: `Your payment for the ${plan === 'business' ? 'Admin' : 'Pro'} plan has been received. Your subscription will be activated shortly.`
-            });
-            
-            setIsLoading(false);
-            resolve({ success: true, reference: response.reference });
-          },
-          onClose: () => {
-            console.log('[Paystack] Payment dialog closed');
-            
-            // ABANDONED PAYMENT HANDLING: resolve pending to cancelled (fire-and-forget)
-            Promise.resolve(
-              supabase
-                .from('payment_records')
-                .select('status')
-                .eq('reference', reference!)
-                .single()
-            ).then(({ data }) => {
-              if (data?.status === 'pending') {
-                updatePaymentStatus(reference!, 'cancelled');
-                toast({
-                  title: 'Payment Cancelled',
-                  description: 'You cancelled the payment. No charges were made.',
-                  variant: 'destructive'
-                });
-              }
-            }).catch((err) => {
-              console.error('[Paystack] Error resolving abandoned payment:', err);
-            });
-            
-            setIsLoading(false);
-            resolve({ success: false, message: 'Payment cancelled' });
-          }
-        });
+        try {
+          const handler = window.PaystackPop!.setup({
+            key: paystackKey,
+            email: user.email!,
+            amount,
+            currency: 'NGN',
+            ref: reference!,
+            metadata: {
+              plan,
+              user_id: user.id
+            },
+            callback: (response: PaystackResponse) => {
+              console.log('[Paystack] Payment successful:', response);
+              
+              // Update payment record to success (fire-and-forget)
+              updatePaymentStatus(reference!, 'success', response.reference);
+              
+              toast({
+                title: 'Payment Successful!',
+                description: `Your payment for the ${plan === 'business' ? 'Admin' : 'Pro'} plan has been received. Your subscription will be activated shortly.`
+              });
+              
+              setProcessing(false);
+              resolve({ success: true, reference: response.reference });
+            },
+            onClose: () => {
+              console.log('[Paystack] Payment dialog closed');
+              
+              // ABANDONED PAYMENT HANDLING: resolve pending to cancelled (fire-and-forget)
+              Promise.resolve(
+                supabase
+                  .from('payment_records')
+                  .select('status')
+                  .eq('reference', reference!)
+                  .single()
+              ).then(({ data }) => {
+                if (data?.status === 'pending') {
+                  updatePaymentStatus(reference!, 'cancelled');
+                  toast({
+                    title: 'Payment Cancelled',
+                    description: 'You cancelled the payment. No charges were made.',
+                    variant: 'destructive'
+                  });
+                }
+              }).catch((err) => {
+                console.error('[Paystack] Error resolving abandoned payment:', err);
+              });
+              
+              setProcessing(false);
+              resolve({ success: false, message: 'Payment cancelled' });
+            }
+          });
 
-        handler.openIframe();
+          handler.openIframe();
+        } catch (setupError) {
+          console.error('[Paystack] Checkout setup failed:', setupError);
+          setProcessing(false);
+          toast({
+            title: 'Payment Error',
+            description: 'Could not open checkout. Please try again.',
+            variant: 'destructive'
+          });
+          resolve({ success: false, message: 'Checkout setup failed' });
+        }
       });
 
     } catch (error) {
       console.error('[Paystack] Payment error:', error);
-      setIsLoading(false);
+      setProcessing(false);
       
       toast({
         title: 'Payment Error',
@@ -400,7 +427,7 @@ export function usePaystack() {
       
       return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
     }
-  }, [user, toast, loadPaystackScript, generateReference, findExistingPendingPayment, createPaymentRecord, updatePaymentStatus]);
+  }, [user, toast, setProcessing, loadPaystackScript, generateReference, findExistingPendingPayment, createPaymentRecord, updatePaymentStatus]);
 
   return {
     initiatePayment,
